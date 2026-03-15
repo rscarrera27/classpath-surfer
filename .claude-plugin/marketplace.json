@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "classpath-surfer",
-      "source": ".",
+      "source": "./",
       "description": "Fast dependency symbol search for Gradle Java/Kotlin projects",
       "tags": ["jvm", "gradle", "java", "kotlin", "dependencies"]
     }
