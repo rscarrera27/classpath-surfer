@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build (aarch64-apple-darwin)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.94
+        with:
+          targets: aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install protoc
+        run: brew install protobuf
+
+      - name: Build release binary
+        run: cargo build --release --target aarch64-apple-darwin
+
+      - name: Package binary
+        run: |
+          cd target/aarch64-apple-darwin/release
+          tar czf ../../../classpath-surfer-aarch64-apple-darwin.tar.gz classpath-surfer
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: classpath-surfer-aarch64-apple-darwin
+          path: classpath-surfer-aarch64-apple-darwin.tar.gz
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: classpath-surfer-aarch64-apple-darwin
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: classpath-surfer-aarch64-apple-darwin.tar.gz
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get release info
+        id: release
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          URL="https://github.com/rscarrera27/classpath-surfer/releases/download/${GITHUB_REF_NAME}/classpath-surfer-aarch64-apple-darwin.tar.gz"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Download tarball and compute SHA256
+        id: sha
+        run: |
+          URL="${{ steps.release.outputs.url }}"
+          curl -fsSL -o archive.tar.gz "$URL"
+          SHA=$(sha256sum archive.tar.gz | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: rscarrera27/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update formula
+        run: |
+          mkdir -p Formula
+          cat > Formula/classpath-surfer.rb << 'FORMULA'
+          class ClasspathSurfer < Formula
+            desc "Fast dependency symbol search for Gradle Java/Kotlin projects"
+            homepage "https://github.com/rscarrera27/classpath-surfer"
+            url "${{ steps.release.outputs.url }}"
+            sha256 "${{ steps.sha.outputs.sha256 }}"
+            version "${{ steps.release.outputs.version }}"
+            license "Apache-2.0"
+
+            def install
+              bin.install "classpath-surfer"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/classpath-surfer --version")
+            end
+          end
+          FORMULA
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/classpath-surfer.rb
+          git commit -m "Update classpath-surfer to ${{ steps.release.outputs.version }}"
+          git push

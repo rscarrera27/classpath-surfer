@@ -1,0 +1,38 @@
+{
+  "name": "classpath-surfer",
+  "version": "0.1.0",
+  "description": "Fast dependency symbol search for Gradle Java/Kotlin projects",
+  "author": {
+    "name": "Sunghyun Kim",
+    "email": "sh@sunghyun.io"
+  },
+  "repository": "https://github.com/rscarrera27/classpath-surfer",
+  "license": "Apache-2.0",
+  "skills": [
+    {
+      "name": "find-symbol",
+      "path": "skills/find-symbol/SKILL.md"
+    },
+    {
+      "name": "show-source",
+      "path": "skills/show-source/SKILL.md"
+    },
+    {
+      "name": "refresh-deps",
+      "path": "skills/refresh-deps/SKILL.md"
+    }
+  ],
+  "agents": "./agents/",
+  "dependencies": {
+    "binaries": [
+      {
+        "name": "classpath-surfer",
+        "install": {
+          "homebrew": "rscarrera27/tap/classpath-surfer",
+          "cargo": "https://github.com/rscarrera27/classpath-surfer"
+        }
+      }
+    ],
+    "runtime": ["gradle"]
+  }
+}

@@ -1,0 +1,241 @@
+// Copyright 2010-2015 JetBrains s.r.o.
+// Licensed under the Apache License, Version 2.0.
+// See https://www.apache.org/licenses/LICENSE-2.0
+//
+// This file is derived from the JetBrains/kotlin repository:
+//   core/metadata/src/metadata.proto
+//   core/metadata.jvm/src/jvm_metadata.proto
+//
+// Source Kotlin version: 2.1.x
+// Last synced: 2026-03-15
+//
+// Modifications from upstream:
+//   - ext_options.proto custom field options removed (wire-format irrelevant)
+//   - proto2 `extend` blocks omitted (prost unsupported; tags 100+ skipped as unknown)
+//   - Nested types flattened to top-level (wire-format identical)
+//   - VersionRequirement, Contract, Effect, Expression, CompilerPluginData etc.
+//     not directly used — represented as bytes fields for forward compat
+
+syntax = "proto2";
+
+// No package declaration — types generated at crate root for simple access.
+
+// ============================================================================
+// String table (from jvm_metadata.proto)
+// ============================================================================
+
+message StringTableTypes {
+  repeated StringTableRecord record = 1;
+  repeated int32 local_name = 5 [packed = true];
+}
+
+message StringTableRecord {
+  optional int32 range = 1;
+  optional int32 predefined_index = 2;
+  optional StringTableOperation operation = 3;
+  repeated int32 substring_index = 4 [packed = true];
+  repeated int32 replace_char = 5 [packed = true];
+  optional string string = 6;
+}
+
+enum StringTableOperation {
+  NONE = 0;
+  INTERNAL_TO_CLASS_ID = 1;
+  DESC_TO_CLASS_ID = 2;
+}
+
+// ============================================================================
+// Metadata messages (from metadata.proto)
+// ============================================================================
+
+message Class {
+  optional int32 flags = 1;
+  repeated int32 supertype_id = 2 [packed = true];
+  optional int32 fq_name = 3;
+  optional int32 companion_object_name = 4;
+  repeated TypeParameter type_parameter = 5;
+  repeated Type supertype = 6;
+  repeated int32 nested_class_name = 7 [packed = true];
+  repeated Constructor constructor = 8;
+  repeated Function function = 9;
+  repeated Property property = 10;
+  repeated TypeAlias type_alias = 11;
+  repeated EnumEntry enum_entry = 13;
+  repeated int32 sealed_subclass_fq_name = 16 [packed = true];
+
+  // Inline class underlying type (Kotlin 1.5+)
+  optional int32 inline_class_underlying_property_name = 17;
+  optional Type inline_class_underlying_type = 18;
+  optional int32 inline_class_underlying_type_id = 19;
+
+  repeated Annotation annotation = 25;
+
+  optional TypeTable type_table = 30;
+
+  // Version requirements — opaque bytes, not parsed
+  repeated bytes version_requirement = 31;
+  optional bytes version_requirement_table = 32;
+  optional int32 jvm_flags = 33;
+}
+
+message Package {
+  repeated Function function = 3;
+  repeated Property property = 4;
+  repeated TypeAlias type_alias = 5;
+  optional TypeTable type_table = 30;
+}
+
+message Function {
+  optional int32 old_flags = 1;
+  required int32 name = 2;
+  optional Type return_type = 3;
+  repeated TypeParameter type_parameter = 4;
+  optional Type receiver_type = 5;
+  repeated ValueParameter value_parameter = 6;
+  optional int32 return_type_id = 7;
+  optional int32 receiver_type_id = 8;
+  optional int32 flags = 9;
+  optional Type context_receiver_type = 10;
+  optional int32 context_receiver_type_id = 11;
+  repeated Annotation annotation = 12;
+  optional TypeTable type_table = 30;
+
+  // Version requirements — opaque bytes
+  repeated bytes version_requirement = 31;
+  optional bytes version_requirement_table = 32;
+  optional bytes contract = 33;
+  optional int32 jvm_flags = 34;
+}
+
+message Property {
+  optional int32 old_flags = 1;
+  required int32 name = 2;
+  optional Type return_type = 3;
+  repeated TypeParameter type_parameter = 4;
+  optional Type receiver_type = 5;
+  optional ValueParameter setter_value_parameter = 6;
+  optional int32 getter_flags = 7;
+  optional int32 setter_flags = 8;
+  optional int32 return_type_id = 9;
+  optional int32 receiver_type_id = 10;
+  optional int32 flags = 11;
+  optional Type context_receiver_type = 12;
+  optional int32 context_receiver_type_id = 13;
+  repeated Annotation getter_annotation = 14;
+  repeated Annotation setter_annotation = 15;
+  repeated Annotation annotation = 16;
+
+  // Version requirements — opaque bytes
+  repeated bytes version_requirement = 31;
+  optional bytes version_requirement_table = 32;
+  optional int32 jvm_flags = 33;
+
+  // Contracts — opaque bytes
+  optional bytes getter_contract = 34;
+  optional bytes setter_contract = 35;
+
+  // Delegated property
+  optional bool is_delegated = 40;
+  optional bytes delegate_field_annotation = 41;
+}
+
+message Constructor {
+  optional int32 flags = 1;
+  repeated ValueParameter value_parameter = 2;
+  repeated Annotation annotation = 3;
+
+  // Version requirements — opaque bytes
+  repeated bytes version_requirement = 31;
+  optional bytes version_requirement_table = 32;
+}
+
+message ValueParameter {
+  optional int32 flags = 1;
+  required int32 name = 2;
+  optional Type type = 3;
+  optional Type vararg_element_type = 4;
+  optional int32 type_id = 5;
+  optional int32 vararg_element_type_id = 6;
+  repeated Annotation annotation = 7;
+}
+
+message TypeParameter {
+  required int32 id = 1;
+  required int32 name = 2;
+  optional bool reified = 3;
+  optional TypeVariance variance = 4;
+  repeated Type upper_bound = 5;
+  repeated int32 upper_bound_id = 6 [packed = true];
+}
+
+message Type {
+  optional int32 flags = 1;
+  repeated TypeArgument argument = 2;
+  optional bool nullable = 3;
+  optional int32 flexible_type_capabilities_id = 4;
+  optional Type flexible_upper_bound = 5;
+  optional int32 class_name = 6;
+  optional int32 type_parameter = 7;
+  optional int32 flexible_upper_bound_id = 8;
+  optional int32 type_parameter_name = 9;
+  optional Type outer_type = 10;
+  optional int32 outer_type_id = 11;
+  optional int32 type_alias_name = 12;
+  optional Type abbreviated_type = 13;
+  optional int32 abbreviated_type_id = 14;
+}
+
+// Flattened from Type.Argument
+message TypeArgument {
+  optional TypeProjection projection = 1;
+  optional Type type = 2;
+  optional int32 type_id = 3;
+}
+
+message TypeTable {
+  repeated Type type = 1;
+  optional int32 first_nullable = 2;
+}
+
+message EnumEntry {
+  optional int32 name = 1;
+  repeated Annotation annotation = 2;
+}
+
+message TypeAlias {
+  optional int32 flags = 1;
+  required int32 name = 2;
+  repeated TypeParameter type_parameter = 3;
+  optional Type underlying_type = 4;
+  optional int32 underlying_type_id = 5;
+  optional Type expanded_type = 6;
+  optional int32 expanded_type_id = 7;
+  repeated Annotation annotation = 8;
+
+  // Version requirements — opaque bytes
+  repeated bytes version_requirement = 31;
+}
+
+message Annotation {
+  required int32 id = 1;
+  repeated bytes argument = 2;
+}
+
+// ============================================================================
+// Enums (flattened from nested types)
+// ============================================================================
+
+// Flattened from Type.Argument.Projection
+enum TypeProjection {
+  IN = 0;
+  OUT = 1;
+  INV = 2;
+  STAR = 3;
+}
+
+// Flattened from TypeParameter.Variance
+enum TypeVariance {
+  TYPE_VARIANCE_IN = 0;
+  TYPE_VARIANCE_OUT = 1;
+  TYPE_VARIANCE_INV = 2;
+}

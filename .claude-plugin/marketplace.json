@@ -1,0 +1,15 @@
+{
+  "name": "classpath-surfer",
+  "owner": {
+    "name": "Sunghyun Kim",
+    "email": "sh@sunghyun.io"
+  },
+  "plugins": [
+    {
+      "name": "classpath-surfer",
+      "source": ".",
+      "description": "Fast dependency symbol search for Gradle Java/Kotlin projects",
+      "tags": ["jvm", "gradle", "java", "kotlin", "dependencies"]
+    }
+  ]
+}

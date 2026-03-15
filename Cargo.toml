@@ -1,0 +1,47 @@
+[package]
+name = "classpath-surfer"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Fast dependency symbol search for Gradle Java/Kotlin projects"
+repository = "https://github.com/rscarrera27/classpath-surfer"
+readme = "README.md"
+keywords = ["gradle", "java", "kotlin", "classpath", "search"]
+categories = ["command-line-utilities", "development-tools"]
+rust-version = "1.94"
+exclude = ["tests/fixtures/"]
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tantivy = "0.25"
+cafebabe = "0.9"
+zip = "7"
+anyhow = "1"
+regex = "1"
+rayon = "1"
+sha2 = "0.10"
+hex = "0.4"
+tempfile = "3"
+prost = "0.14"
+ratatui = "0.30"
+crossterm = "0.29"
+syntect = { version = "5.3.0", features = ["yaml-load"] }
+
+[build-dependencies]
+prost-build = "0.14"
+
+[dev-dependencies]
+criterion = { version = "0.8", features = ["html_reports"] }
+
+[[bench]]
+name = "search"
+harness = false
+
+[[bench]]
+name = "refresh"
+harness = false
+
+[package.metadata.docs.rs]
+all-features = true
