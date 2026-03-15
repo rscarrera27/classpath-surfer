@@ -117,9 +117,37 @@ impl IndexReader {
             } else {
                 let simple_name = schema.get_field("simple_name").unwrap();
                 let name_parts = schema.get_field("name_parts").unwrap();
-                let mut parser = QueryParser::for_index(&self.index, vec![simple_name, name_parts]);
+                let mut parser =
+                    QueryParser::for_index(&self.index, vec![simple_name, name_parts]);
                 parser.set_conjunction_by_default();
-                parser.parse_query(query_str)?
+                let token_query = parser.parse_query(query_str)?;
+
+                // Build prefix queries so that e.g. "murmur" matches "murmur3".
+                // Each query word must prefix-match in at least one search field.
+                let words: Vec<&str> = query_str.split_whitespace().collect();
+                let mut per_word: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+                for word in &words {
+                    let escaped = regex_escape_term(&word.to_lowercase());
+                    let pattern = format!("{escaped}.*");
+                    let mut field_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> =
+                        Vec::new();
+                    if let Ok(q) = RegexQuery::from_pattern(&pattern, simple_name) {
+                        field_clauses.push((Occur::Should, Box::new(q)));
+                    }
+                    if let Ok(q) = RegexQuery::from_pattern(&pattern, name_parts) {
+                        field_clauses.push((Occur::Should, Box::new(q)));
+                    }
+                    if !field_clauses.is_empty() {
+                        per_word
+                            .push((Occur::Must, Box::new(BooleanQuery::new(field_clauses))));
+                    }
+                }
+
+                // Combine: exact token match OR prefix match
+                Box::new(BooleanQuery::new(vec![
+                    (Occur::Should, token_query),
+                    (Occur::Should, Box::new(BooleanQuery::new(per_word))),
+                ]))
             }
         } else {
             Box::new(AllQuery)
@@ -395,4 +423,31 @@ fn doc_to_search_result(schema: &Schema, doc: &tantivy::TantivyDocument) -> Sear
         source_language,
         scopes,
     }
+}
+
+/// Escape regex special characters in a search term for use in [`RegexQuery`].
+fn regex_escape_term(term: &str) -> String {
+    let mut escaped = String::with_capacity(term.len() * 2);
+    for c in term.chars() {
+        if matches!(
+            c,
+            '.' | '*'
+                | '+'
+                | '?'
+                | '('
+                | ')'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+                | '|'
+                | '^'
+                | '$'
+                | '\\'
+        ) {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped
 }

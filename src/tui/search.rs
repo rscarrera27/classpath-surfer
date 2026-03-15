@@ -204,13 +204,7 @@ pub fn run_interactive(project_dir: &Path, query: &SearchQuery) -> Result<()> {
                         }
 
                         let next = if i >= state.results.len() - 1 {
-                            if state.has_more {
-                                // load_more failed but more exist — stay put
-                                i
-                            } else {
-                                // All loaded — wrap to first
-                                0
-                            }
+                            i
                         } else {
                             i + 1
                         };
@@ -218,11 +212,7 @@ pub fn run_interactive(project_dir: &Path, query: &SearchQuery) -> Result<()> {
                     }
                     KeyCode::Up | KeyCode::Char('k') => {
                         let i = table_state.selected().unwrap_or(0);
-                        let next = if i == 0 {
-                            state.results.len() - 1
-                        } else {
-                            i - 1
-                        };
+                        let next = if i == 0 { 0 } else { i - 1 };
                         table_state.select(Some(next));
                     }
                     KeyCode::Enter => {
