@@ -145,6 +145,19 @@ pub fn open_or_create_index(index_dir: &Path) -> Result<OpenIndexResult> {
     }
 }
 
+/// Check whether the index at the given path has a schema compatible with the
+/// current version.  Returns `false` when the index does not exist or its
+/// schema is missing required fields.
+pub fn is_index_schema_current(index_dir: &Path) -> bool {
+    if !index_dir.join("meta.json").exists() {
+        return false;
+    }
+    match Index::open_in_dir(index_dir) {
+        Ok(idx) => is_schema_compatible(&idx.schema()),
+        Err(_) => false,
+    }
+}
+
 /// Check whether the existing index schema contains all required fields.
 fn is_schema_compatible(schema: &Schema) -> bool {
     let required = [

@@ -35,7 +35,11 @@ pub fn run_with_java_home(
     // 0. Early return: skip Gradle if index is fresh (unless --force)
     if !force {
         let indexed_manifest_path = surfer_dir.join("indexed-manifest.json");
-        if indexed_manifest_path.exists() && !staleness::is_stale(project_dir)? {
+        let index_dir = surfer_dir.join("index");
+        if indexed_manifest_path.exists()
+            && writer::is_index_schema_current(&index_dir)
+            && !staleness::is_stale(project_dir)?
+        {
             eprintln!("Index is up to date. Skipping Gradle invocation.");
             return Ok(RefreshOutput {
                 mode: "up_to_date".to_string(),
