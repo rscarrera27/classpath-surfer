@@ -57,9 +57,13 @@ enum Commands {
         #[arg(long)]
         regex: bool,
 
-        /// Maximum number of results
-        #[arg(long, default_value = "20")]
-        limit: usize,
+        /// Maximum number of results (default: 20 for agentic/plain, 200 for TUI)
+        #[arg(long)]
+        limit: Option<usize>,
+
+        /// Number of results to skip (for pagination)
+        #[arg(long, default_value = "0")]
+        offset: usize,
 
         /// Restrict search to a specific dependency (GAV pattern)
         #[arg(long)]
@@ -147,6 +151,7 @@ fn main() {
             fqn,
             regex,
             limit,
+            offset,
             dependency,
             access,
         } => {
@@ -156,21 +161,42 @@ fn main() {
                 Some(access.split(',').map(|s| s.trim()).collect())
             };
             let access_refs = access_levels.as_deref();
-            let sq = SearchQuery {
-                query: &query,
-                symbol_type: &r#type,
-                fqn_mode: fqn,
-                regex_mode: regex,
-                limit,
-                dependency: dependency.as_deref(),
-                access_levels: access_refs,
-            };
-            render(
-                output_mode,
-                cli::search::run(&project_dir, &sq),
-                cli::render::search,
-                Some(|out: &_| classpath_surfer::tui::search::run(out, &project_dir)),
-            )
+
+            if output_mode == OutputMode::Tui {
+                // TUI manages its own pagination (infinite scroll)
+                let effective_limit = limit.unwrap_or(50);
+                let sq = SearchQuery {
+                    query: &query,
+                    symbol_type: &r#type,
+                    fqn_mode: fqn,
+                    regex_mode: regex,
+                    limit: effective_limit,
+                    dependency: dependency.as_deref(),
+                    access_levels: access_refs,
+                    offset: 0,
+                };
+                cli::require_index(&project_dir).and_then(|()| {
+                    classpath_surfer::tui::search::run_interactive(&project_dir, &sq)
+                })
+            } else {
+                let effective_limit = limit.unwrap_or(20);
+                let sq = SearchQuery {
+                    query: &query,
+                    symbol_type: &r#type,
+                    fqn_mode: fqn,
+                    regex_mode: regex,
+                    limit: effective_limit,
+                    dependency: dependency.as_deref(),
+                    access_levels: access_refs,
+                    offset,
+                };
+                render(
+                    output_mode,
+                    cli::search::run(&project_dir, &sq),
+                    cli::render::search,
+                    None::<fn(&_) -> anyhow::Result<()>>,
+                )
+            }
         }
         Commands::Show {
             fqn,

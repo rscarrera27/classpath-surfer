@@ -33,6 +33,7 @@ fn incremental_indexing() {
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     assert!(!results.is_empty(), "Gson should be found before removal");
@@ -65,6 +66,7 @@ fn incremental_indexing() {
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     assert!(
@@ -81,6 +83,7 @@ fn incremental_indexing() {
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     assert!(

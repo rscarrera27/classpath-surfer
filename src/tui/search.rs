@@ -11,23 +11,69 @@ use ratatui::{
 
 use crate::cli;
 use crate::config::Config;
+use crate::index::reader::IndexReader;
 use crate::manifest::ClasspathManifest;
-use crate::model::{SearchOutput, SearchResult, ShowOutput, SymbolKind, format_lang_display};
+use crate::model::{SearchQuery, SearchResult, ShowOutput, SymbolKind, format_lang_display};
 use crate::tui::show::{self, HighlightedShowOutput};
 
 /// Minimum terminal width for side-by-side layout.
 const SIDE_BY_SIDE_MIN_WIDTH: u16 = 120;
 
-/// Display search results in an interactive scrollable table with source code preview.
+/// Number of rows from the bottom at which to trigger loading more results.
+const LOAD_MORE_THRESHOLD: usize = 5;
+
+/// Mutable search state that grows as the user scrolls.
+struct SearchState {
+    query: String,
+    results: Vec<SearchResult>,
+    total_matches: usize,
+    has_more: bool,
+    page_size: usize,
+}
+
+impl SearchState {
+    /// Try to load the next page of results from the index.
+    fn load_more(&mut self, reader: &IndexReader, query_template: &SearchQuery) -> Result<()> {
+        if !self.has_more {
+            return Ok(());
+        }
+        let mut paged_query = SearchQuery {
+            offset: self.results.len(),
+            ..*query_template
+        };
+        paged_query.limit = self.page_size;
+        let (more_results, total) = reader.search(&paged_query)?;
+        self.total_matches = total;
+        self.has_more = self.results.len() + more_results.len() < total;
+        self.results.extend(more_results);
+        Ok(())
+    }
+}
+
+/// Display search results with infinite scroll and integrated source viewer.
 ///
-/// Pressing `Enter` on a result loads and displays its source code. When the
-/// terminal is wide enough (≥ 120 columns), the source is shown side-by-side;
-/// otherwise it takes the full screen.
-pub fn run(output: &SearchOutput, project_dir: &Path) -> Result<()> {
-    if output.results.is_empty() {
-        eprintln!("No results found for '{}'.", output.query);
+/// Opens the index directly and fetches pages of results on demand as the
+/// user scrolls through the table.
+pub fn run_interactive(project_dir: &Path, query: &SearchQuery) -> Result<()> {
+    let index_dir = project_dir.join(".classpath-surfer/index");
+    let reader = IndexReader::open(&index_dir)?;
+
+    // Initial fetch
+    let (initial_results, total_matches) = reader.search(query)?;
+
+    if initial_results.is_empty() {
+        eprintln!("No results found for '{}'.", query.query);
         return Ok(());
     }
+
+    let has_more = initial_results.len() < total_matches;
+    let mut state = SearchState {
+        query: query.query.to_string(),
+        results: initial_results,
+        total_matches,
+        has_more,
+        page_size: query.limit,
+    };
 
     let mut guard = super::TerminalGuard::enter()?;
     let mut table_state = TableState::default().with_selected(Some(0));
@@ -57,7 +103,7 @@ pub fn run(output: &SearchOutput, project_dir: &Path) -> Result<()> {
                 render_search_table(
                     frame,
                     chunks[0],
-                    output,
+                    &state,
                     &mut table_state,
                     error_message.as_deref(),
                     true,
@@ -88,7 +134,7 @@ pub fn run(output: &SearchOutput, project_dir: &Path) -> Result<()> {
                 render_search_table(
                     frame,
                     area,
-                    output,
+                    &state,
                     &mut table_state,
                     error_message.as_deref(),
                     false,
@@ -127,7 +173,7 @@ pub fn run(output: &SearchOutput, project_dir: &Path) -> Result<()> {
                     ShowKeyAction::ReloadSymbol => {
                         error_message = None;
                         match load_show_output(
-                            output,
+                            &state.results,
                             &table_state,
                             project_dir,
                             &config,
@@ -147,26 +193,31 @@ pub fn run(output: &SearchOutput, project_dir: &Path) -> Result<()> {
                     KeyCode::Char('q') | KeyCode::Esc => break,
                     KeyCode::Down | KeyCode::Char('j') => {
                         let i = table_state.selected().unwrap_or(0);
-                        let next = if i >= output.results.len() - 1 {
-                            0
+                        let next = if i >= state.results.len() - 1 {
+                            // At the very end — don't wrap, stay at last item
+                            i
                         } else {
                             i + 1
                         };
                         table_state.select(Some(next));
+
+                        // Infinite scroll: load more when near the bottom
+                        if state.has_more
+                            && next + LOAD_MORE_THRESHOLD >= state.results.len()
+                            && let Err(e) = state.load_more(&reader, query)
+                        {
+                            error_message = Some(format!("{e:#}"));
+                        }
                     }
                     KeyCode::Up | KeyCode::Char('k') => {
                         let i = table_state.selected().unwrap_or(0);
-                        let next = if i == 0 {
-                            output.results.len() - 1
-                        } else {
-                            i - 1
-                        };
+                        let next = if i == 0 { 0 } else { i - 1 };
                         table_state.select(Some(next));
                     }
                     KeyCode::Enter => {
                         error_message = None;
                         match load_show_output(
-                            output,
+                            &state.results,
                             &table_state,
                             project_dir,
                             &config,
@@ -244,14 +295,14 @@ impl ShowViewState {
 /// skipping repeated staleness checks. Falls back to the full
 /// [`cli::show::run`] path otherwise.
 fn load_show_output(
-    search_output: &SearchOutput,
+    results: &[SearchResult],
     table_state: &TableState,
     project_dir: &Path,
     config: &Config,
     manifest: Option<&ClasspathManifest>,
 ) -> Result<ShowOutput> {
     let idx = table_state.selected().unwrap_or(0);
-    let result = &search_output.results[idx];
+    let result = &results[idx];
 
     // For methods/fields, strip the simple_name to get the class FQN
     let class_fqn = if result.symbol_kind == SymbolKind::Class {
@@ -288,13 +339,13 @@ fn load_show_output(
 fn render_search_table(
     frame: &mut Frame,
     area: Rect,
-    output: &SearchOutput,
-    state: &mut TableState,
+    state: &SearchState,
+    table_state: &mut TableState,
     error: Option<&str>,
     compact: bool,
 ) {
     // Adaptive detail height: 5 (compact), 6 (full), 7 (full + kotlin sigs)
-    let has_kotlin = output.results.iter().any(|r| r.signature.kotlin.is_some());
+    let has_kotlin = state.results.iter().any(|r| r.signature.kotlin.is_some());
     let detail_height: u16 = if compact {
         4
     } else if has_kotlin {
@@ -329,7 +380,7 @@ fn render_search_table(
         .style(Style::default().bold())
         .bottom_margin(1);
 
-    let rows: Vec<Row> = output
+    let rows: Vec<Row> = state
         .results
         .iter()
         .map(|r| {
@@ -373,19 +424,14 @@ fn render_search_table(
         ]
     };
 
-    let title = if output.total_matches > output.results.len() {
-        format!(
-            " Search: {} ({}/{} results) ",
-            output.query,
-            output.results.len(),
-            output.total_matches
-        )
+    let loaded = state.results.len();
+    let total = state.total_matches;
+    let title = if state.has_more {
+        format!(" Search: {} ({}/{}+ results) ", state.query, loaded, total)
+    } else if total > loaded {
+        format!(" Search: {} ({}/{} results) ", state.query, loaded, total)
     } else {
-        format!(
-            " Search: {} ({} results) ",
-            output.query,
-            output.results.len()
-        )
+        format!(" Search: {} ({} results) ", state.query, loaded)
     };
 
     let table = Table::new(rows, widths)
@@ -394,11 +440,11 @@ fn render_search_table(
         .row_highlight_style(Style::default().reversed())
         .highlight_symbol(">> ");
 
-    frame.render_stateful_widget(table, table_area, state);
+    frame.render_stateful_widget(table, table_area, table_state);
 
     // --- Detail panel for selected row ---
-    let selected_idx = state.selected().unwrap_or(0);
-    render_detail_panel(frame, detail_area, &output.results[selected_idx], compact);
+    let selected_idx = table_state.selected().unwrap_or(0);
+    render_detail_panel(frame, detail_area, &state.results[selected_idx], compact);
 
     // --- Hint bar ---
     let hint_text = if let Some(err) = error {

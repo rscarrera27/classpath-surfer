@@ -202,6 +202,7 @@ fn search_without_index() {
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         },
     );
     assert!(result.is_err(), "search without index should fail");
@@ -241,6 +242,7 @@ fn agentic_error_output() {
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         },
     );
     let err = result.unwrap_err();
@@ -275,6 +277,7 @@ fn agentic_exit_codes() {
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         },
     );
     let err = result.unwrap_err();

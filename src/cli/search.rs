@@ -16,9 +16,13 @@ pub fn run(project_dir: &Path, query: &SearchQuery) -> Result<SearchOutput> {
     let reader = IndexReader::open(&index_dir)?;
     let (results, total_matches) = reader.search(query)?;
 
+    let has_more = query.offset + results.len() < total_matches;
     Ok(SearchOutput {
         query: query.query.to_string(),
         total_matches,
+        offset: query.offset,
+        limit: query.limit,
+        has_more,
         results,
     })
 }

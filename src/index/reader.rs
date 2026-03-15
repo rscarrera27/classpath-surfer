@@ -146,8 +146,10 @@ impl IndexReader {
         }
 
         let combined = BooleanQuery::new(clauses);
-        let (top_docs, total_count) =
-            searcher.search(&combined, &(TopDocs::with_limit(sq.limit), Count))?;
+        let (top_docs, total_count) = searcher.search(
+            &combined,
+            &(TopDocs::with_limit(sq.limit).and_offset(sq.offset), Count),
+        )?;
 
         let mut results = Vec::new();
         for (_score, doc_address) in top_docs {

@@ -105,6 +105,7 @@ fn bench_search(c: &mut Criterion) {
                     limit: 20,
                     dependency: None,
                     access_levels: None,
+                    offset: 0,
                 })
                 .unwrap();
         });
@@ -121,6 +122,7 @@ fn bench_search(c: &mut Criterion) {
                     limit: 20,
                     dependency: None,
                     access_levels: None,
+                    offset: 0,
                 })
                 .unwrap();
         });
@@ -137,6 +139,7 @@ fn bench_search(c: &mut Criterion) {
                     limit: 20,
                     dependency: None,
                     access_levels: None,
+                    offset: 0,
                 })
                 .unwrap();
         });
@@ -153,6 +156,7 @@ fn bench_search(c: &mut Criterion) {
                     limit: 20,
                     dependency: None,
                     access_levels: None,
+                    offset: 0,
                 })
                 .unwrap();
         });
@@ -169,6 +173,7 @@ fn bench_search(c: &mut Criterion) {
                     limit: 20,
                     dependency: Some("com.google.guava:guava:33.4.0-jre"),
                     access_levels: None,
+                    offset: 0,
                 })
                 .unwrap();
         });

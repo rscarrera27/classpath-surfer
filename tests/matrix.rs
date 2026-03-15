@@ -41,6 +41,7 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .expect("search should succeed");
     assert!(
@@ -58,6 +59,7 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .expect("search should succeed");
     assert!(
@@ -75,6 +77,7 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .expect("search should succeed");
     assert!(
@@ -110,6 +113,7 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .expect("search should succeed");
     assert!(
@@ -144,6 +148,7 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
             limit: 100,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .expect("search should succeed");
     let kotlin_methods: Vec<_> = results

@@ -23,6 +23,8 @@ pub struct SearchQuery<'a> {
     pub regex_mode: bool,
     /// Maximum number of results.
     pub limit: usize,
+    /// Number of results to skip (for pagination).
+    pub offset: usize,
     /// Restrict to a specific dependency GAV.
     pub dependency: Option<&'a str>,
     /// Filter by visibility levels (`None` = all).
@@ -36,6 +38,12 @@ pub struct SearchOutput {
     pub query: String,
     /// Total number of matching documents (may exceed `results.len()` due to limit).
     pub total_matches: usize,
+    /// Offset used for this page of results.
+    pub offset: usize,
+    /// Limit used for this page of results.
+    pub limit: usize,
+    /// Whether more results are available beyond this page.
+    pub has_more: bool,
     /// Matching symbols ranked by relevance.
     pub results: Vec<SearchResult>,
 }

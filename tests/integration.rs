@@ -25,6 +25,7 @@ fn kotlin_metadata_extraction() {
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .expect("search should succeed");
     assert!(
@@ -53,6 +54,7 @@ fn kotlin_metadata_extraction() {
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .expect("search should succeed");
     let deferred = results
@@ -73,6 +75,7 @@ fn kotlin_metadata_extraction() {
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .expect("search should succeed");
     let job = results.iter().find(|r| {
@@ -100,6 +103,7 @@ fn kotlin_jvm_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let json_class = results
@@ -128,6 +132,7 @@ fn kotlin_jvm_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let serializable = results
@@ -148,6 +153,7 @@ fn kotlin_jvm_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let ktor = results.iter().find(|r| r.fqn.contains("io.ktor.client"));
@@ -169,6 +175,7 @@ fn kmp_jvm_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let instant = results.iter().find(|r| r.fqn.contains("kotlinx.datetime"));
@@ -186,6 +193,7 @@ fn kmp_jvm_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let clock = results.iter().find(|r| r.fqn.contains("kotlinx.datetime"));
@@ -201,6 +209,7 @@ fn kmp_jvm_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let buffer = results.iter().find(|r| r.fqn.contains("kotlinx.io"));
@@ -215,6 +224,7 @@ fn kmp_jvm_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let source = results.iter().find(|r| r.fqn.contains("kotlinx.io"));
@@ -235,6 +245,7 @@ fn annotation_processor_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let dagger = results.iter().find(|r| r.fqn == "dagger.Component");
@@ -249,6 +260,7 @@ fn annotation_processor_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let module = results.iter().find(|r| r.fqn == "dagger.Module");
@@ -263,6 +275,7 @@ fn annotation_processor_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let provides = results.iter().find(|r| r.fqn == "dagger.Provides");
@@ -284,6 +297,7 @@ fn large_library_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let spring = results.iter().find(|r| r.fqn.contains("springframework"));
@@ -302,6 +316,7 @@ fn large_library_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let okhttp = results.iter().find(|r| r.fqn.contains("okhttp3"));
@@ -329,6 +344,7 @@ fn interface_only_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let slf4j = results.iter().find(|r| r.fqn == "org.slf4j.Logger");
@@ -343,6 +359,7 @@ fn interface_only_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let factory = results.iter().find(|r| r.fqn == "org.slf4j.LoggerFactory");
@@ -358,6 +375,7 @@ fn interface_only_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let servlet = results.iter().find(|r| r.fqn.contains("jakarta.servlet"));
@@ -375,6 +393,7 @@ fn interface_only_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .unwrap();
     let filter = results.iter().find(|r| r.fqn == "jakarta.servlet.Filter");
@@ -395,6 +414,7 @@ fn search_no_results() {
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         },
     )
     .expect("search with no results should succeed (not error)");
@@ -418,6 +438,7 @@ fn agentic_search_output_fields() {
             limit: 10,
             dependency: None,
             access_levels: None,
+            offset: 0,
         },
     )
     .expect("search should succeed");
@@ -496,6 +517,7 @@ fn show_no_source_fails_with_no_decompile() {
                 limit: 5,
                 dependency: Some(&dep.gav()),
                 access_levels: None,
+                offset: 0,
             })
             .ok()
             .unwrap_or_default();
@@ -572,6 +594,7 @@ fn scala_clojure_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .expect("search should succeed");
     let scala_option = results
@@ -601,6 +624,7 @@ fn scala_clojure_symbols() {
             limit: 20,
             dependency: None,
             access_levels: None,
+            offset: 0,
         })
         .expect("search should succeed");
     let clj_pv = results

@@ -16,8 +16,16 @@ pub fn search(output: &SearchOutput) {
     }
 
     // Show truncation notice if there are more matches than displayed
-    if output.total_matches > output.results.len() {
-        println!(
+    if output.has_more {
+        eprintln!(
+            "Showing {} of {} matches for '{}'. Use --offset {} to see more.",
+            output.results.len(),
+            output.total_matches,
+            output.query,
+            output.offset + output.results.len()
+        );
+    } else if output.total_matches > output.results.len() {
+        eprintln!(
             "Showing {} of {} matches for '{}'.",
             output.results.len(),
             output.total_matches,
