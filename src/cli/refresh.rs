@@ -13,21 +13,37 @@ use crate::staleness;
 ///
 /// Runs the Gradle `classpathSurferExport` task to extract the classpath,
 /// merges per-module manifests, computes a GAV-level diff for incremental
-/// indexing (or performs a full rebuild when `full` is true), and updates
+/// indexing (or performs a full rebuild when `force` is true), and updates
 /// staleness markers (lockfile hash, build-file mtimes).
-pub fn run(project_dir: &Path, configurations: &[String], full: bool) -> Result<RefreshOutput> {
-    run_with_java_home(project_dir, configurations, full, None)
+///
+/// When `force` is false and the index is not stale, the Gradle invocation
+/// is skipped entirely and an `up_to_date` result is returned immediately.
+pub fn run(project_dir: &Path, configurations: &[String], force: bool) -> Result<RefreshOutput> {
+    run_with_java_home(project_dir, configurations, force, None)
 }
 
 /// Same as [`run`], but allows overriding `JAVA_HOME` for the Gradle invocation.
 pub fn run_with_java_home(
     project_dir: &Path,
     configurations: &[String],
-    full: bool,
+    force: bool,
     java_home: Option<&Path>,
 ) -> Result<RefreshOutput> {
     let surfer_dir = project_dir.join(".classpath-surfer");
     std::fs::create_dir_all(&surfer_dir)?;
+
+    // 0. Early return: skip Gradle if index is fresh (unless --force)
+    if !force {
+        let indexed_manifest_path = surfer_dir.join("indexed-manifest.json");
+        if indexed_manifest_path.exists() && !staleness::is_stale(project_dir)? {
+            eprintln!("Index is up to date. Skipping Gradle invocation.");
+            return Ok(RefreshOutput {
+                mode: "up_to_date".to_string(),
+                dependencies_processed: 0,
+                symbols_indexed: 0,
+            });
+        }
+    }
 
     // 1. Write init script to temp location and run Gradle
     let init_script_path = surfer_dir.join("init-script.gradle");
@@ -57,7 +73,7 @@ pub fn run_with_java_home(
     let open_result = writer::open_or_create_index(&index_dir)?;
     let fields = writer::SchemaFields::new(&open_result.index.schema());
     let mut index_writer = writer::create_writer(&open_result.index)?;
-    let force_full = full || open_result.schema_rebuilt;
+    let force_full = force || open_result.schema_rebuilt;
 
     let unique_deps = merge::deduplicate(&current_manifest);
 

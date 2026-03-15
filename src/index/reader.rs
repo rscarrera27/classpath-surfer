@@ -20,7 +20,7 @@ impl IndexReader {
     ///
     /// Returns an error if the index schema is missing required fields,
     /// indicating that the index was built with an older version and needs
-    /// to be rebuilt via `classpath-surfer refresh --full`.
+    /// to be rebuilt via `classpath-surfer refresh --force`.
     pub fn open(index_dir: &Path) -> Result<Self> {
         let index = Index::open_in_dir(index_dir)
             .with_context(|| format!("opening index at {}", index_dir.display()))?;
@@ -95,11 +95,35 @@ impl IndexReader {
             let simple_name_field = schema.get_field("simple_name").unwrap();
             Box::new(RegexQuery::from_pattern(sq.query, simple_name_field)?)
         } else {
-            // Text search on simple_name and name_parts
-            let simple_name = schema.get_field("simple_name").unwrap();
-            let name_parts = schema.get_field("name_parts").unwrap();
-            let parser = QueryParser::for_index(&self.index, vec![simple_name, name_parts]);
-            parser.parse_query(sq.query)?
+            // Smart search: auto-detect FQN or combined token+substring
+            let query_str = sq.query;
+
+            if query_str.chars().filter(|&c| c == '.').count() >= 2 {
+                // Auto FQN: query looks like a fully qualified name
+                let fqn_field = schema.get_field("fqn").unwrap();
+                Box::new(TermQuery::new(
+                    tantivy::Term::from_field_text(fqn_field, query_str),
+                    IndexRecordOption::Basic,
+                ))
+            } else {
+                // Combined: token search + substring search
+                let simple_name = schema.get_field("simple_name").unwrap();
+                let name_parts = schema.get_field("name_parts").unwrap();
+
+                // Strategy 1: token-based (BM25 scoring)
+                let mut parser =
+                    QueryParser::for_index(&self.index, vec![simple_name, name_parts]);
+                parser.set_conjunction_by_default();
+                let token_query = parser.parse_query(query_str)?;
+
+                // Strategy 2: substring via regex on simple_name
+                let substring_query = build_substring_query(query_str, simple_name)?;
+
+                Box::new(BooleanQuery::new(vec![
+                    (Occur::Should, token_query),
+                    (Occur::Should, substring_query),
+                ]))
+            }
         };
 
         // Apply filters

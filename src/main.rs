@@ -35,9 +35,9 @@ enum Commands {
         #[arg(long, default_value = "compileClasspath,runtimeClasspath")]
         configurations: String,
 
-        /// Force full re-index (ignore previous manifest)
+        /// Force Gradle re-run and full re-index, ignoring cached state
         #[arg(long)]
-        full: bool,
+        force: bool,
     },
 
     /// Search for symbols in indexed dependencies
@@ -132,7 +132,7 @@ fn main() {
         ),
         Commands::Refresh {
             configurations,
-            full,
+            force,
         } => {
             let configs: Vec<String> = configurations
                 .split(',')
@@ -140,7 +140,7 @@ fn main() {
                 .collect();
             render(
                 output_mode,
-                cli::refresh::run(&project_dir, &configs, full),
+                cli::refresh::run(&project_dir, &configs, force),
                 cli::render::refresh,
                 None::<fn(&_) -> anyhow::Result<()>>,
             )
