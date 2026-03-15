@@ -102,7 +102,8 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps  # 문서 빌드 검증
 - `src/output.rs` — 출력 모드 enum (`Agentic`/`TUI`/`Plain`), JSON emit 헬퍼
 - `src/parser/` — JAR, classfile, descriptor 파싱, Kotlin 메타데이터 디코딩
 - `.claude-plugin/` — Claude Code 플러그인 매니페스트 (`plugin.json`, `marketplace.json`)
-- `skills/` — Claude Code 스킬 정의 (`find-symbol`, `show-source`, `refresh-deps`)
+- `agents/` — Claude Code 에이전트 정의 (`find-symbol`, `show-source`, `list-deps`)
+- `skills/` — Claude Code 스킬 정의 (`find-symbol`, `show-source`, `list-deps`, `manage-index`)
 - `src/staleness/` — 인덱스 변경 감지 (lockfile, buildfile)
 - `src/tui/` — ratatui 기반 인터랙티브 TUI 렌더러 (search, show, status)
 - `tests/common/mod.rs` — 테스트 공유 인프라 (LazyLock 공유 인덱스, 헬퍼, 매크로)
