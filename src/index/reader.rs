@@ -117,8 +117,7 @@ impl IndexReader {
             } else {
                 let simple_name = schema.get_field("simple_name").unwrap();
                 let name_parts = schema.get_field("name_parts").unwrap();
-                let mut parser =
-                    QueryParser::for_index(&self.index, vec![simple_name, name_parts]);
+                let mut parser = QueryParser::for_index(&self.index, vec![simple_name, name_parts]);
                 parser.set_conjunction_by_default();
                 let token_query = parser.parse_query(query_str)?;
 
@@ -138,8 +137,7 @@ impl IndexReader {
                         field_clauses.push((Occur::Should, Box::new(q)));
                     }
                     if !field_clauses.is_empty() {
-                        per_word
-                            .push((Occur::Must, Box::new(BooleanQuery::new(field_clauses))));
+                        per_word.push((Occur::Must, Box::new(BooleanQuery::new(field_clauses))));
                     }
                 }
 
@@ -431,19 +429,7 @@ fn regex_escape_term(term: &str) -> String {
     for c in term.chars() {
         if matches!(
             c,
-            '.' | '*'
-                | '+'
-                | '?'
-                | '('
-                | ')'
-                | '['
-                | ']'
-                | '{'
-                | '}'
-                | '|'
-                | '^'
-                | '$'
-                | '\\'
+            '.' | '*' | '+' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|' | '^' | '$' | '\\'
         ) {
             escaped.push('\\');
         }
