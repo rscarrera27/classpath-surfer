@@ -32,11 +32,11 @@ Coding agents (like Claude Code) working on Gradle Java/Kotlin projects repeated
 
 | | Feature | Description |
 |---|---------|-------------|
-| :mag: | **Symbol search** | Search classes, methods, and fields by name, FQN, or regex — CamelCase-split tokens match `ImmutableList` as `Immutable List` |
+| :mag: | **Symbol search** | Smart search with auto FQN detection, CamelCase token splitting, and prefix matching — filter by kind, dependency, access level, or configuration scope |
 | :zap: | **Fast indexing** | Auto-extract Gradle project classpath and index all symbols in seconds; incremental updates via GAV-level diff |
 | :globe_with_meridians: | **Kotlin signatures** | Decode `@kotlin.Metadata` protobuf to display native Kotlin signatures like `suspend fun` and `data class` |
 | :package: | **JVM-language agnostic** | Java, Kotlin, Scala, Groovy, Clojure — search symbols from dependencies written in any JVM language |
-| :page_facing_up: | **Source code lookup** | Serve original source from source JARs; when unavailable, on-demand CFR/Vineflower decompilation with automatic caching — non-Java sources include a decompiled Java view |
+| :page_facing_up: | **Source code lookup** | Auto-focus on a symbol with surrounding context; source JARs when available, otherwise on-demand CFR/Vineflower decompilation — Kotlin shows original `.kt` source with a secondary decompiled Java view |
 | :robot: | **AI agent integration** | `--agentic` JSON output with classified exit codes for any AI agent; optional Claude Code plugin for slash-command skills |
 
 ## Quick Start
@@ -61,61 +61,78 @@ classpath-surfer status
 # → 38 dependencies, 77,219 symbols indexed, 2.1 MB on disk
 ```
 
-### Search
+### Find a symbol
 
 ```bash
-# Simple name search
+# Search by name
 classpath-surfer search ImmutableList
 
-# Fully qualified name
-classpath-surfer search com.google.common.collect.ImmutableList --fqn
+# CamelCase token matching — finds ImmutableList, ImmutableMap, ImmutableSet, etc.
+classpath-surfer search Immutable
 
-# Filter by kind
-classpath-surfer search execute --type method
-
-# Regex
-classpath-surfer search "Http.*Client" --regex
-
-# Include protected members too
-classpath-surfer search execute --access public,protected
-
-# Include all access levels (public, protected, package-private, private)
-classpath-surfer search execute --access all
-
-# Scope to a dependency
-classpath-surfer search send --dependency "io.netty:*"
-
-# Kotlin symbols — search coroutine builders and types
-classpath-surfer search CoroutineScope --type class
+# Find coroutine launchers in kotlinx-coroutines
 classpath-surfer search launch --type method --dependency "org.jetbrains.kotlinx:*"
 
-# Structured JSON output (for AI agents / scripts)
-classpath-surfer search OkHttpClient --agentic
+# Regex search for HTTP client classes
+classpath-surfer search "Http.*Client" --regex --type class
 
-# Pipe to another tool (auto-detects non-TTY, outputs plain text)
-classpath-surfer search ImmutableList | head
+# Filter by configuration scope
+classpath-surfer search Annotation --type class --scope compileClasspath
+
+# FQN-like queries are auto-detected
+classpath-surfer search com.google.common.collect.ImmutableList
 ```
 
-### View source
+### Read the source
 
 ```bash
-# Java source from a source JAR
+# Show source — auto-focuses on the symbol with 25 lines of context
 classpath-surfer show com.google.common.collect.ImmutableList
+classpath-surfer show com.google.common.collect.ImmutableList.of
 
-# Kotlin source — displays original .kt source with Kotlin-native signatures
+# Widen context / show the full file
+classpath-surfer show com.google.common.collect.ImmutableList --context 50
+classpath-surfer show com.google.common.collect.ImmutableList --full
+
+# Kotlin sources display original .kt files (suspend fun, data class, etc.)
 classpath-surfer show kotlinx.coroutines.CoroutineScope
 ```
 
 If a `-sources.jar` is available it will be used; otherwise the class is decompiled with CFR (default) or Vineflower.
+
+### Browse dependencies
+
+```bash
+# List indexed dependencies with symbol counts and scopes
+classpath-surfer deps
+
+# Filter by GAV pattern
+classpath-surfer deps --filter "io.netty:*"
+
+# Show only runtime dependencies
+classpath-surfer deps --scope runtimeClasspath
+```
+
+### AI agent / script integration
+
+```bash
+# All commands support --agentic for structured JSON output
+classpath-surfer search ImmutableList --agentic
+classpath-surfer show com.google.common.collect.ImmutableList --agentic
+
+# Non-TTY automatically outputs plain text (pipe-friendly)
+classpath-surfer search ImmutableList | head
+```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `init` | Install Gradle init script, default config, and run initial refresh |
-| `refresh` | Extract classpath via Gradle and build/update the symbol index |
+| `refresh` | Extract classpath via Gradle and build/update the symbol index (skips Gradle when fresh; use `--force` to override) |
 | `search <query>` | Search for symbols in the index |
-| `show <fqn>` | Display source code for a symbol |
+| `show <fqn>` | Display source code for a symbol (focuses on the target symbol by default) |
+| `deps` | List indexed dependencies with symbol counts |
 | `status` | Show index stats (dependency count, symbol count, staleness, disk size) |
 | `clean` | Remove index data |
 | `--agentic` | Global flag: emit structured JSON output for AI agents and scripts |

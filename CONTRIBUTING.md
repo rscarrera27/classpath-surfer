@@ -50,7 +50,7 @@ classpath-surfer follows a pipeline architecture:
 
 1. Create a new module in `src/cli/` (e.g., `src/cli/my_command.rs`).
 2. Add a variant to the `Commands` enum in `src/cli/mod.rs`.
-3. Define an output struct `XxxOutput` in `src/model.rs` with `#[derive(Serialize)]`, and have the handler return `Result<XxxOutput>`.
+3. Define an output struct `XxxOutput` in `src/model/output.rs` with `#[derive(Serialize)]`, and have the handler return `Result<XxxOutput>`.
 4. Add a Plain text renderer in `src/cli/render.rs`.
 5. Add a TUI renderer in `src/tui/` (if the command benefits from interactive display).
 6. Add OutputMode dispatch in `main.rs` (Agentic → JSON, TUI → ratatui, Plain → render).
@@ -80,6 +80,7 @@ If you modify the Tantivy index schema in `src/index/schema.rs`, you **must** up
 ```
 project root
 ├── .claude-plugin/      # Claude Code plugin manifest & marketplace config
+├── agents/              # Claude Code agent definitions (find-symbol, show-source)
 ├── skills/              # Claude Code skill definitions (SKILL.md)
 ├── build.rs             # Proto compilation (prost-build)
 ├── proto/               # Kotlin metadata protobuf schema
@@ -93,7 +94,7 @@ project root
     ├── gradle/          # Init script & Gradle runner
     ├── index/           # Tantivy schema, reader, writer
     ├── manifest/        # Classpath manifest model, merge, diff
-    ├── model.rs         # Core types (SymbolDoc, SearchResult, SourceProvider)
+    ├── model/           # Core types (SymbolDoc, SearchResult, SourceProvider, *Output)
     ├── output.rs        # Output mode detection (Agentic/TUI/Plain)
     ├── parser/          # JAR / .class / descriptor / Kotlin metadata parsing
     ├── source/          # Source resolver & decompiler integration

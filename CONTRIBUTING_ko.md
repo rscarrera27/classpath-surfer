@@ -50,7 +50,7 @@ classpath-surfer는 파이프라인 아키텍처를 따릅니다:
 
 1. `src/cli/`에 새 모듈을 생성합니다 (예: `src/cli/my_command.rs`).
 2. `src/cli/mod.rs`의 `Commands` enum에 variant를 추가합니다.
-3. `src/model.rs`에 `#[derive(Serialize)]`로 출력 구조체 `XxxOutput`을 정의하고, 핸들러가 `Result<XxxOutput>`을 반환하도록 합니다.
+3. `src/model/output.rs`에 `#[derive(Serialize)]`로 출력 구조체 `XxxOutput`을 정의하고, 핸들러가 `Result<XxxOutput>`을 반환하도록 합니다.
 4. `src/cli/render.rs`에 Plain 텍스트 렌더러를 추가합니다.
 5. `src/tui/`에 TUI 렌더러를 추가합니다 (인터랙티브 표시가 필요한 경우).
 6. `main.rs`에 OutputMode 분기를 추가합니다 (Agentic → JSON, TUI → ratatui, Plain → render).
@@ -80,6 +80,7 @@ classpath-surfer는 파이프라인 아키텍처를 따릅니다:
 ```
 project root
 ├── .claude-plugin/      # Claude Code 플러그인 매니페스트 및 마켓플레이스 설정
+├── agents/              # Claude Code 에이전트 정의 (find-symbol, show-source)
 ├── skills/              # Claude Code 스킬 정의 (SKILL.md)
 ├── build.rs             # Proto 컴파일 (prost-build)
 ├── proto/               # Kotlin 메타데이터 protobuf 스키마
@@ -93,7 +94,7 @@ project root
     ├── gradle/          # Init script 및 Gradle 실행기
     ├── index/           # Tantivy 스키마, 리더, 라이터
     ├── manifest/        # Classpath 매니페스트 모델, 병합, 차분
-    ├── model.rs         # 핵심 타입 (SymbolDoc, SearchResult, SourceProvider)
+    ├── model/           # 핵심 타입 (SymbolDoc, SearchResult, SourceProvider, *Output)
     ├── output.rs        # 출력 모드 감지 (Agentic/TUI/Plain)
     ├── parser/          # JAR / .class / 디스크립터 / Kotlin 메타데이터 파싱
     ├── source/          # 소스 리졸버 및 디컴파일러 통합
