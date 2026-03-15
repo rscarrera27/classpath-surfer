@@ -2,7 +2,7 @@ mod common;
 
 use classpath_surfer::cli;
 use classpath_surfer::index::reader::IndexReader;
-use classpath_surfer::model::SearchQuery;
+use classpath_surfer::model::{SearchQuery, SymbolKind};
 use common::require_jdk;
 
 // ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("ImmutableList", "class")
+            ..SearchQuery::with_types("ImmutableList", &[SymbolKind::Class])
         })
         .expect("search should succeed");
     assert!(
@@ -47,7 +47,7 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("StringUtils", "class")
+            ..SearchQuery::with_types("StringUtils", &[SymbolKind::Class])
         })
         .expect("search should succeed");
     assert!(
@@ -59,7 +59,7 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("Gson", "class")
+            ..SearchQuery::with_types("Gson", &[SymbolKind::Class])
         })
         .expect("search should succeed");
     assert!(
@@ -89,7 +89,7 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("CoroutineScope", "class")
+            ..SearchQuery::with_types("CoroutineScope", &[SymbolKind::Class])
         })
         .expect("search should succeed");
     assert!(
@@ -118,7 +118,7 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 100,
-            ..SearchQuery::with_type("cancel", "method")
+            ..SearchQuery::with_types("cancel", &[SymbolKind::Method])
         })
         .expect("search should succeed");
     let kotlin_methods: Vec<_> = results

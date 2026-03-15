@@ -9,7 +9,8 @@ use tantivy::{Index, ReloadPolicy};
 
 use crate::error::CliError;
 use crate::model::{
-    SearchQuery, SearchResult, SignatureDisplay, SourceLanguage, SymbolKind, matches_gav_pattern,
+    AccessLevel, SearchQuery, SearchResult, SignatureDisplay, SourceLanguage, SymbolKind,
+    matches_gav_pattern,
 };
 
 /// Result of GAV filter construction: the Tantivy query clause (if any) and matched GAVs.
@@ -106,7 +107,7 @@ impl IndexReader {
         clauses.push((Occur::Must, build_base_query(&self.index, &schema, sq)?));
 
         // Symbol type filter
-        if let Some(filter) = build_symbol_type_filter(&schema, sq.symbol_type) {
+        if let Some(filter) = build_symbol_type_filter(&schema, sq.symbol_types) {
             clauses.push((Occur::Must, filter));
         }
 
@@ -355,33 +356,32 @@ fn build_base_query(
     ])))
 }
 
-/// Build a symbol type filter from a comma-separated kinds string.
+/// Build a symbol type filter from a slice of [`SymbolKind`] values.
 ///
-/// Returns `None` when `symbol_type` is `"any"` (no filtering needed).
+/// Returns `None` when `symbol_types` is empty (no filtering needed).
 fn build_symbol_type_filter(
     schema: &Schema,
-    symbol_type: &str,
+    symbol_types: &[SymbolKind],
 ) -> Option<Box<dyn tantivy::query::Query>> {
-    if symbol_type == "any" {
+    if symbol_types.is_empty() {
         return None;
     }
 
     let kind_field = schema.get_field("symbol_kind").unwrap();
-    let types: Vec<&str> = symbol_type.split(',').map(|s| s.trim()).collect();
 
-    if types.len() == 1 {
+    if symbol_types.len() == 1 {
         Some(Box::new(TermQuery::new(
-            tantivy::Term::from_field_text(kind_field, types[0]),
+            tantivy::Term::from_field_text(kind_field, symbol_types[0].as_str()),
             IndexRecordOption::Basic,
         )))
     } else {
-        let type_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = types
+        let type_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = symbol_types
             .iter()
-            .map(|&t| {
+            .map(|t| {
                 (
                     Occur::Should,
                     Box::new(TermQuery::new(
-                        tantivy::Term::from_field_text(kind_field, t),
+                        tantivy::Term::from_field_text(kind_field, t.as_str()),
                         IndexRecordOption::Basic,
                     )) as Box<dyn tantivy::query::Query>,
                 )
@@ -391,16 +391,25 @@ fn build_symbol_type_filter(
     }
 }
 
-/// Build an access level filter from a list of allowed levels.
+/// Build an access level filter from a slice of [`AccessLevel`] values.
 ///
-/// Returns `None` when `access_levels` is `None` (no filtering needed).
+/// Returns `None` when `access_levels` is empty or contains [`AccessLevel::All`].
 fn build_access_level_filter(
     schema: &Schema,
-    access_levels: Option<&[&str]>,
+    access_levels: &[AccessLevel],
 ) -> Option<Box<dyn tantivy::query::Query>> {
-    let levels = access_levels?;
+    // Collect only concrete levels (skip All)
+    let terms: Vec<&str> = access_levels
+        .iter()
+        .filter_map(|l| l.as_index_str())
+        .collect();
+
+    if terms.is_empty() {
+        return None;
+    }
+
     let al_field = schema.get_field("access_level").unwrap();
-    let level_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = levels
+    let level_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = terms
         .iter()
         .map(|&level| {
             (

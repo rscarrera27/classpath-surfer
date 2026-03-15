@@ -2,7 +2,8 @@ mod common;
 
 use classpath_surfer::cli;
 use classpath_surfer::index::reader::IndexReader;
-use classpath_surfer::model::SearchQuery;
+use classpath_surfer::model::{AccessLevel, SearchQuery, SymbolKind};
+use classpath_surfer::source::decompiler::Decompiler;
 use classpath_surfer::source::resolver;
 use common::require_indexed_project;
 
@@ -19,7 +20,7 @@ fn kotlin_metadata_extraction() {
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("CoroutineScope", "class")
+            ..SearchQuery::with_types("CoroutineScope", &[SymbolKind::Class])
         })
         .expect("search should succeed");
     assert!(
@@ -42,7 +43,7 @@ fn kotlin_metadata_extraction() {
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("Deferred", "class")
+            ..SearchQuery::with_types("Deferred", &[SymbolKind::Class])
         })
         .expect("search should succeed");
     let deferred = results
@@ -57,7 +58,7 @@ fn kotlin_metadata_extraction() {
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("Job", "class")
+            ..SearchQuery::with_types("Job", &[SymbolKind::Class])
         })
         .expect("search should succeed");
     let job = results.iter().find(|r| {
@@ -77,7 +78,7 @@ fn kotlin_jvm_symbols() {
 
     // kotlinx-serialization: Json class
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Json", "class"))
+        .search(&SearchQuery::with_types("Json", &[SymbolKind::Class]))
         .unwrap();
     let json_class = results
         .iter()
@@ -97,7 +98,10 @@ fn kotlin_jvm_symbols() {
 
     // kotlinx-serialization: Serializable annotation (transitive from core)
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Serializable", "class"))
+        .search(&SearchQuery::with_types(
+            "Serializable",
+            &[SymbolKind::Class],
+        ))
         .unwrap();
     let serializable = results
         .iter()
@@ -109,7 +113,7 @@ fn kotlin_jvm_symbols() {
 
     // Ktor: HttpClient class
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("HttpClient", "class"))
+        .search(&SearchQuery::with_types("HttpClient", &[SymbolKind::Class]))
         .unwrap();
     let ktor = results.iter().find(|r| r.fqn.contains("io.ktor.client"));
     assert!(ktor.is_some(), "io.ktor.client.HttpClient should be found");
@@ -122,7 +126,7 @@ fn kmp_jvm_symbols() {
 
     // kotlinx-datetime
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Instant", "class"))
+        .search(&SearchQuery::with_types("Instant", &[SymbolKind::Class]))
         .unwrap();
     let instant = results.iter().find(|r| r.fqn.contains("kotlinx.datetime"));
     assert!(
@@ -131,20 +135,20 @@ fn kmp_jvm_symbols() {
     );
 
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Clock", "class"))
+        .search(&SearchQuery::with_types("Clock", &[SymbolKind::Class]))
         .unwrap();
     let clock = results.iter().find(|r| r.fqn.contains("kotlinx.datetime"));
     assert!(clock.is_some(), "kotlinx.datetime.Clock should be found");
 
     // kotlinx-io
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Buffer", "class"))
+        .search(&SearchQuery::with_types("Buffer", &[SymbolKind::Class]))
         .unwrap();
     let buffer = results.iter().find(|r| r.fqn.contains("kotlinx.io"));
     assert!(buffer.is_some(), "kotlinx.io.Buffer should be found");
 
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Source", "class"))
+        .search(&SearchQuery::with_types("Source", &[SymbolKind::Class]))
         .unwrap();
     let source = results.iter().find(|r| r.fqn.contains("kotlinx.io"));
     assert!(source.is_some(), "kotlinx.io.Source should be found");
@@ -156,19 +160,19 @@ fn annotation_processor_symbols() {
     let reader = IndexReader::open(&project.index_dir()).unwrap();
 
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Component", "class"))
+        .search(&SearchQuery::with_types("Component", &[SymbolKind::Class]))
         .unwrap();
     let dagger = results.iter().find(|r| r.fqn == "dagger.Component");
     assert!(dagger.is_some(), "dagger.Component should be found");
 
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Module", "class"))
+        .search(&SearchQuery::with_types("Module", &[SymbolKind::Class]))
         .unwrap();
     let module = results.iter().find(|r| r.fqn == "dagger.Module");
     assert!(module.is_some(), "dagger.Module should be found");
 
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Provides", "class"))
+        .search(&SearchQuery::with_types("Provides", &[SymbolKind::Class]))
         .unwrap();
     let provides = results.iter().find(|r| r.fqn == "dagger.Provides");
     assert!(provides.is_some(), "dagger.Provides should be found");
@@ -181,7 +185,10 @@ fn large_library_symbols() {
 
     // Spring Core
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Environment", "class"))
+        .search(&SearchQuery::with_types(
+            "Environment",
+            &[SymbolKind::Class],
+        ))
         .unwrap();
     let spring = results.iter().find(|r| r.fqn.contains("springframework"));
     assert!(
@@ -191,7 +198,10 @@ fn large_library_symbols() {
 
     // OkHttp
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("OkHttpClient", "class"))
+        .search(&SearchQuery::with_types(
+            "OkHttpClient",
+            &[SymbolKind::Class],
+        ))
         .unwrap();
     let okhttp = results.iter().find(|r| r.fqn.contains("okhttp3"));
     assert!(okhttp.is_some(), "okhttp3.OkHttpClient should be found");
@@ -210,20 +220,26 @@ fn interface_only_symbols() {
 
     // SLF4J
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Logger", "class"))
+        .search(&SearchQuery::with_types("Logger", &[SymbolKind::Class]))
         .unwrap();
     let slf4j = results.iter().find(|r| r.fqn == "org.slf4j.Logger");
     assert!(slf4j.is_some(), "org.slf4j.Logger should be found");
 
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("LoggerFactory", "class"))
+        .search(&SearchQuery::with_types(
+            "LoggerFactory",
+            &[SymbolKind::Class],
+        ))
         .unwrap();
     let factory = results.iter().find(|r| r.fqn == "org.slf4j.LoggerFactory");
     assert!(factory.is_some(), "org.slf4j.LoggerFactory should be found");
 
     // Jakarta Servlet
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("HttpServlet", "class"))
+        .search(&SearchQuery::with_types(
+            "HttpServlet",
+            &[SymbolKind::Class],
+        ))
         .unwrap();
     let servlet = results.iter().find(|r| r.fqn.contains("jakarta.servlet"));
     assert!(
@@ -232,7 +248,7 @@ fn interface_only_symbols() {
     );
 
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Filter", "class"))
+        .search(&SearchQuery::with_types("Filter", &[SymbolKind::Class]))
         .unwrap();
     let filter = results.iter().find(|r| r.fqn == "jakarta.servlet.Filter");
     assert!(filter.is_some(), "jakarta.servlet.Filter should be found");
@@ -264,7 +280,7 @@ fn agentic_search_output_fields() {
         &project.project_dir,
         &SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("ImmutableList", "class")
+            ..SearchQuery::with_types("ImmutableList", &[SymbolKind::Class])
         },
     )
     .expect("search should succeed");
@@ -338,7 +354,7 @@ fn show_no_source_fails_with_no_decompile() {
             .search(&SearchQuery {
                 limit: 5,
                 dependency: Some(&dep.gav()),
-                ..SearchQuery::with_type("*", "class")
+                ..SearchQuery::with_types("*", &[SymbolKind::Class])
             })
             .ok()
             .unwrap_or_default();
@@ -348,7 +364,7 @@ fn show_no_source_fails_with_no_decompile() {
                 &result.fqn,
                 &project.project_dir,
                 &manifest,
-                "cfr",
+                Decompiler::Cfr,
                 None,
                 true, // no_decompile = true
             );
@@ -365,7 +381,7 @@ fn show_no_source_fails_with_no_decompile() {
             "com.google.common.collect.ImmutableList",
             &project.project_dir,
             &manifest,
-            "cfr",
+            Decompiler::Cfr,
             None,
             true, // no_decompile, but source jar should exist
         );
@@ -383,7 +399,7 @@ fn show_with_source_jar() {
 
     let opts = cli::show::ShowOptions {
         fqn: "com.google.gson.Gson",
-        decompiler: "cfr",
+        decompiler: Decompiler::Cfr,
         decompiler_jar: None,
         no_decompile: true,
         context: 25,
@@ -409,7 +425,7 @@ fn scala_clojure_symbols() {
 
     // Scala: scala.Option should be indexed with source_language == "scala"
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("Option", "class"))
+        .search(&SearchQuery::with_types("Option", &[SymbolKind::Class]))
         .expect("search should succeed");
     let scala_option = results
         .iter()
@@ -430,7 +446,10 @@ fn scala_clojure_symbols() {
 
     // Clojure: clojure.lang.PersistentVector is written in Java
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("PersistentVector", "class"))
+        .search(&SearchQuery::with_types(
+            "PersistentVector",
+            &[SymbolKind::Class],
+        ))
         .expect("search should succeed");
     let clj_pv = results
         .iter()
@@ -511,13 +530,13 @@ fn search_dependency_lists_symbols() {
     let project = require_indexed_project!();
     let sq = SearchQuery {
         query: None,
-        symbol_type: "class,method",
+        symbol_types: &[SymbolKind::Class, SymbolKind::Method],
         fqn_mode: false,
         regex_mode: false,
         limit: 50,
         offset: 0,
         dependency: Some("com.google.code.gson:gson:*"),
-        access_levels: Some(&["public"]),
+        access_levels: &[AccessLevel::Public],
         scope: None,
     };
     let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");
@@ -536,13 +555,13 @@ fn search_dependency_type_filter() {
     let project = require_indexed_project!();
     let sq = SearchQuery {
         query: None,
-        symbol_type: "class,method",
+        symbol_types: &[SymbolKind::Class, SymbolKind::Method],
         fqn_mode: false,
         regex_mode: false,
         limit: 200,
         offset: 0,
         dependency: Some("com.google.code.gson:gson:*"),
-        access_levels: Some(&["public"]),
+        access_levels: &[AccessLevel::Public],
         scope: None,
     };
     let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");
@@ -561,13 +580,13 @@ fn search_dependency_pagination() {
     let project = require_indexed_project!();
     let sq = SearchQuery {
         query: None,
-        symbol_type: "class,method",
+        symbol_types: &[SymbolKind::Class, SymbolKind::Method],
         fqn_mode: false,
         regex_mode: false,
         limit: 5,
         offset: 0,
         dependency: Some("com.google.code.gson:gson:*"),
-        access_levels: Some(&["public"]),
+        access_levels: &[AccessLevel::Public],
         scope: None,
     };
     let page1 = cli::search::run(&project.project_dir, &sq).expect("search page 1 should succeed");
@@ -594,7 +613,7 @@ fn search_results_have_scopes() {
     let (results, _, _) = reader
         .search(&SearchQuery {
             limit: 5,
-            ..SearchQuery::with_type("ImmutableList", "class")
+            ..SearchQuery::with_types("ImmutableList", &[SymbolKind::Class])
         })
         .expect("search should succeed");
 
@@ -618,7 +637,10 @@ fn smart_search_multi_keyword_and() {
 
     // "immutable list" — both must be substrings
     let (results, _count, _) = reader
-        .search(&SearchQuery::with_type("immutable list", "class"))
+        .search(&SearchQuery::with_types(
+            "immutable list",
+            &[SymbolKind::Class],
+        ))
         .unwrap();
     assert!(
         results.iter().any(|r| r.fqn.contains("ImmutableList")),
@@ -636,7 +658,10 @@ fn smart_search_auto_fqn() {
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("com.google.common.collect.ImmutableList", "class")
+            ..SearchQuery::with_types(
+                "com.google.common.collect.ImmutableList",
+                &[SymbolKind::Class],
+            )
         })
         .unwrap();
     assert!(
@@ -714,7 +739,7 @@ fn show_focused_on_method() {
     let project = require_indexed_project!();
     let opts = classpath_surfer::cli::show::ShowOptions {
         fqn: "com.google.gson.Gson.fromJson",
-        decompiler: "cfr",
+        decompiler: Decompiler::Cfr,
         decompiler_jar: None,
         no_decompile: true,
         context: 10,
@@ -751,7 +776,7 @@ fn show_focused_on_constructor() {
     let project = require_indexed_project!();
     let opts = classpath_surfer::cli::show::ShowOptions {
         fqn: "com.google.gson.Gson.Gson",
-        decompiler: "cfr",
+        decompiler: Decompiler::Cfr,
         decompiler_jar: None,
         no_decompile: true,
         context: 10,
@@ -774,7 +799,7 @@ fn show_class_fqn_no_focus() {
     let project = require_indexed_project!();
     let opts = classpath_surfer::cli::show::ShowOptions {
         fqn: "com.google.gson.Gson",
-        decompiler: "cfr",
+        decompiler: Decompiler::Cfr,
         decompiler_jar: None,
         no_decompile: true,
         context: 25,
@@ -794,7 +819,7 @@ fn show_method_with_full_flag() {
     let project = require_indexed_project!();
     let opts = classpath_surfer::cli::show::ShowOptions {
         fqn: "com.google.gson.Gson.fromJson",
-        decompiler: "cfr",
+        decompiler: Decompiler::Cfr,
         decompiler_jar: None,
         no_decompile: true,
         context: 10,

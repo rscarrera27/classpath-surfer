@@ -13,7 +13,7 @@ maxTurns: 10
 
 Use these flags when relevant to the user's request:
 
-- `--type class,method,field` — filter by symbol kind (comma-separated; default: `any`)
+- `--type class,method,field` — filter by symbol kind (comma-separated; omit for all types)
 - `--fqn` — exact fully-qualified-name match (e.g., `--fqn` with query `com.google.common.collect.ImmutableList`)
 - `--regex` — treat query as a regex pattern against simple name
 - `--dependency <GAV>` — restrict to dependencies matching a GAV pattern (glob supported, e.g., `"com.google.*:guava:*"`)

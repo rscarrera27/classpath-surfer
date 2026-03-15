@@ -8,14 +8,15 @@ use crate::model::{
     FocusInfo, SearchQuery, ShowOutput, SourceOrigin, SourceProvider, SourceView, SymbolKind,
 };
 use crate::parser::jar;
+use crate::source::decompiler::Decompiler;
 use crate::source::{locator, resolver};
 
 /// Show options controlling focus behavior.
 pub struct ShowOptions<'a> {
     /// Fully qualified name (class, method, or field).
     pub fqn: &'a str,
-    /// Decompiler name.
-    pub decompiler: &'a str,
+    /// Decompiler backend.
+    pub decompiler: Decompiler,
     /// Path to decompiler JAR.
     pub decompiler_jar: Option<&'a Path>,
     /// Fail instead of decompiling.
@@ -99,9 +100,7 @@ fn run_with_manifest(
             SymbolKind::Method => {
                 resolve_method_line(manifest, &output.gav, &class_fqn, simple_name)
             }
-            SymbolKind::Field => {
-                resolve_field_line(manifest, &output.gav, &class_fqn, simple_name)
-            }
+            SymbolKind::Field => resolve_field_line(manifest, &output.gav, &class_fqn, simple_name),
             _ => None,
         };
 
@@ -124,7 +123,7 @@ pub fn load_show_output(
     project_dir: &Path,
     manifest: &ClasspathManifest,
     fqn: &str,
-    decompiler: &str,
+    decompiler: Decompiler,
     decompiler_jar: Option<&Path>,
     no_decompile: bool,
 ) -> Result<ShowOutput> {
@@ -290,13 +289,13 @@ fn lookup_member_info(project_dir: &Path, fqn: &str) -> Option<(SymbolKind, Stri
     let reader = IndexReader::open(&index_dir).ok()?;
     let query = SearchQuery {
         query: Some(fqn),
-        symbol_type: "any",
+        symbol_types: &[],
         fqn_mode: true,
         regex_mode: false,
         limit: 1,
         offset: 0,
         dependency: None,
-        access_levels: None,
+        access_levels: &[],
         scope: None,
     };
     let (results, _, _) = reader.search(&query).ok()?;

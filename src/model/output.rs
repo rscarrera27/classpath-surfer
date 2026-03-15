@@ -5,7 +5,7 @@
 
 use serde::Serialize;
 
-use super::{SearchResult, SourceOrigin};
+use super::{AccessLevel, SearchResult, SourceOrigin, SymbolKind};
 
 /// Query parameters for symbol search.
 ///
@@ -20,9 +20,8 @@ pub struct SearchQuery<'a> {
     /// Symbol name, FQN, or regex pattern.  `None` to list all symbols
     /// (requires `dependency` to be set).
     pub query: Option<&'a str>,
-    /// Filter by symbol type — `"any"`, or comma-separated kinds
-    /// (`"class"`, `"method"`, `"field"`, e.g. `"class,method"`).
-    pub symbol_type: &'a str,
+    /// Filter by symbol kind.  Empty slice = any (no filter).
+    pub symbol_types: &'a [SymbolKind],
     /// Exact FQN match mode.
     pub fqn_mode: bool,
     /// Regex search mode.
@@ -33,8 +32,8 @@ pub struct SearchQuery<'a> {
     pub offset: usize,
     /// Restrict to dependencies matching a GAV pattern (glob, e.g. `"com.google.*:guava:*"`).
     pub dependency: Option<&'a str>,
-    /// Filter by visibility levels (`None` = all).
-    pub access_levels: Option<&'a [&'a str]>,
+    /// Filter by access level.  Empty slice = all (no filter).
+    pub access_levels: &'a [AccessLevel],
     /// Filter results to a specific configuration scope (e.g. `"compileClasspath"`).
     pub scope: Option<&'a str>,
 }
@@ -44,21 +43,21 @@ impl<'a> SearchQuery<'a> {
     pub fn simple(query: &'a str) -> Self {
         Self {
             query: Some(query),
-            symbol_type: "any",
+            symbol_types: &[],
             fqn_mode: false,
             regex_mode: false,
             limit: 20,
             offset: 0,
             dependency: None,
-            access_levels: None,
+            access_levels: &[],
             scope: None,
         }
     }
 
-    /// Create a search query filtered to a specific symbol type.
-    pub fn with_type(query: &'a str, symbol_type: &'a str) -> Self {
+    /// Create a search query filtered to specific symbol types.
+    pub fn with_types(query: &'a str, symbol_types: &'a [SymbolKind]) -> Self {
         Self {
-            symbol_type,
+            symbol_types,
             ..Self::simple(query)
         }
     }

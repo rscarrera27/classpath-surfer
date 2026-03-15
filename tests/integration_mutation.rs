@@ -2,7 +2,7 @@ mod common;
 
 use classpath_surfer::cli;
 use classpath_surfer::index::reader::IndexReader;
-use classpath_surfer::model::SearchQuery;
+use classpath_surfer::model::{SearchQuery, SymbolKind};
 use classpath_surfer::staleness;
 use common::require_jdk;
 
@@ -27,7 +27,7 @@ fn incremental_indexing() {
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("Gson", "class")
+            ..SearchQuery::with_types("Gson", &[SymbolKind::Class])
         })
         .unwrap();
     assert!(!results.is_empty(), "Gson should be found before removal");
@@ -54,7 +54,7 @@ fn incremental_indexing() {
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("Gson", "class")
+            ..SearchQuery::with_types("Gson", &[SymbolKind::Class])
         })
         .unwrap();
     assert!(
@@ -65,7 +65,7 @@ fn incremental_indexing() {
     let (results, _count, _) = reader
         .search(&SearchQuery {
             limit: 10,
-            ..SearchQuery::with_type("ImmutableList", "class")
+            ..SearchQuery::with_types("ImmutableList", &[SymbolKind::Class])
         })
         .unwrap();
     assert!(

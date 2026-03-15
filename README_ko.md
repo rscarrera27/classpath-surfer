@@ -74,6 +74,9 @@ classpath-surfer search Immutable
 # "kotlinx-coroutines에서 코루틴 시작하는 함수가 뭐였지?"
 classpath-surfer search launch --type method --dependency "org.jetbrains.kotlinx:*"
 
+# "Guava에 어떤 심볼이 있는지 전부 보여줘"
+classpath-surfer search --dependency "com.google.guava:guava"
+
 # "HTTP 클라이언트 관련 클래스 전부 보여줘"
 classpath-surfer search "Http.*Client" --regex --type class
 
@@ -222,7 +225,8 @@ Claude Code가 외부 의존성 API를 직접 탐색하고 읽을 수 있게 해
   "decompiler": "cfr",
   "decompiler_jar": null,
   "configurations": ["compileClasspath", "runtimeClasspath"],
-  "java_home": null
+  "java_home": null,
+  "no_decompile": false
 }
 ```
 
@@ -232,6 +236,9 @@ Claude Code가 외부 의존성 API를 직접 탐색하고 읽을 수 있게 해
 | `decompiler_jar` | 디컴파일러 JAR 경로. 미설정 시 `CFR_JAR` 또는 `VINEFLOWER_JAR` 환경 변수 사용 |
 | `configurations` | 해석할 Gradle 설정 |
 | `java_home` | `JAVA_HOME` 오버라이드 (디컴파일러 실행 시 사용) |
+| `no_decompile` | `false` (기본값). `true`이면 source JAR이 없을 때 디컴파일 대신 실패 |
+
+CLI 플래그(`--decompiler`, `--configurations`, `--no-decompile`)가 설정 파일 값을 오버라이드합니다.
 
 ## 요구사항
 

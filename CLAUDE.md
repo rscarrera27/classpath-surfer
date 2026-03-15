@@ -48,8 +48,9 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps  # 문서 빌드 검증
 - Rust edition 2024, MSRV 1.94
 - `anyhow::Result`를 모든 fallible 함수의 반환 타입으로 사용
 - 사용자 대면 메시지는 `eprintln!`, 데이터 출력은 `println!` (stdout/stderr 분리)
-- CLI 파싱에 clap derive 매크로 사용
+- CLI 파싱에 clap derive 매크로 사용 (`ValueEnum`으로 열거형 옵션 검증)
 - `#![deny(missing_docs)]` 적용 — 모든 `pub` 아이템에 `///` 문서 주석 필수
+- CLI 옵션 중 Config 파일로도 설정 가능한 것(`--decompiler`, `--configurations`, `--no-decompile`)은 `Option<T>`로 선언하고 `main.rs`에서 Config 값과 merge
 
 ## CLI Design Rules
 
@@ -100,10 +101,12 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps  # 문서 빌드 검증
 - `src/index/` — Tantivy 스키마 정의, 읽기/쓰기
 - `src/manifest/` — classpath 매니페스트 모델, 병합, 차분
 - `src/output.rs` — 출력 모드 enum (`Agentic`/`TUI`/`Plain`), JSON emit 헬퍼
+- `src/model/mod.rs` — 도메인 타입 (`SymbolKind`, `AccessLevel`, `SearchResult` 등 — `ValueEnum` derive 포함)
 - `src/parser/` — JAR, classfile, descriptor 파싱, Kotlin 메타데이터 디코딩
 - `.claude-plugin/` — Claude Code 플러그인 매니페스트 (`plugin.json`, `marketplace.json`)
 - `agents/` — Claude Code 에이전트 정의 (`find-symbol`, `show-source`, `list-deps`)
 - `skills/` — Claude Code 스킬 정의 (`find-symbol`, `show-source`, `list-deps`, `manage-index`)
+- `src/source/decompiler.rs` — `Decompiler` enum (`Cfr`/`Vineflower`) 및 디컴파일 실행
 - `src/staleness/` — 인덱스 변경 감지 (lockfile, buildfile)
 - `src/tui/` — ratatui 기반 인터랙티브 TUI 렌더러 (search, show, status)
 - `tests/common/mod.rs` — 테스트 공유 인프라 (LazyLock 공유 인덱스, 헬퍼, 매크로)

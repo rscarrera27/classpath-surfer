@@ -325,7 +325,7 @@ fn load_show_output(
 
     let opts = cli::show::ShowOptions {
         fqn: &result.fqn,
-        decompiler: &config.decompiler,
+        decompiler: config.decompiler,
         decompiler_jar: config.decompiler_jar.as_deref(),
         no_decompile: config.no_decompile,
         context: 50,

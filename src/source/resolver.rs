@@ -7,6 +7,7 @@ use crate::error::CliError;
 use crate::manifest::{ClasspathManifest, DependencyInfo};
 use crate::model::{ResolvedSource, SourceProvider};
 use crate::parser::{classfile, jar};
+use crate::source::decompiler::Decompiler;
 
 /// Resolve source code for a given FQN, returning a primary view and optional secondary view.
 ///
@@ -18,7 +19,7 @@ pub fn resolve_source(
     fqn: &str,
     project_dir: &Path,
     manifest: &ClasspathManifest,
-    decompiler: &str,
+    decompiler: Decompiler,
     decompiler_jar: Option<&Path>,
     no_decompile: bool,
 ) -> Result<ResolvedSource> {
@@ -86,7 +87,7 @@ fn decompile_cached(
     project_dir: &Path,
     gav: &str,
     fqn: &str,
-    decompiler: &str,
+    decompiler: Decompiler,
     decompiler_jar: Option<&Path>,
     load_class_bytes: impl FnOnce() -> Result<Vec<u8>>,
 ) -> Result<String> {

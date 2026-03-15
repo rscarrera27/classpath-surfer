@@ -5,7 +5,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 
 use classpath_surfer::cli;
 use classpath_surfer::index::reader::IndexReader;
-use classpath_surfer::model::SearchQuery;
+use classpath_surfer::model::{SearchQuery, SymbolKind};
 
 fn get_java_home(version: &str) -> Option<PathBuf> {
     if let Ok(home) = std::env::var(format!("JAVA_{version}_HOME")) {
@@ -127,7 +127,10 @@ fn bench_search(c: &mut Criterion) {
     group.bench_function("type_filter", |b| {
         b.iter(|| {
             let _ = reader
-                .search(&SearchQuery::with_type("ImmutableList", "class"))
+                .search(&SearchQuery::with_types(
+                    "ImmutableList",
+                    &[SymbolKind::Class],
+                ))
                 .unwrap();
         });
     });

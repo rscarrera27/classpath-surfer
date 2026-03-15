@@ -73,6 +73,9 @@ classpath-surfer search Immutable
 # Find coroutine launchers in kotlinx-coroutines
 classpath-surfer search launch --type method --dependency "org.jetbrains.kotlinx:*"
 
+# List all symbols in a specific dependency
+classpath-surfer search --dependency "com.google.guava:guava"
+
 # Regex search for HTTP client classes
 classpath-surfer search "Http.*Client" --regex --type class
 
@@ -221,7 +224,8 @@ This lets Claude Code discover and read dependency APIs without you having to lo
   "decompiler": "cfr",
   "decompiler_jar": null,
   "configurations": ["compileClasspath", "runtimeClasspath"],
-  "java_home": null
+  "java_home": null,
+  "no_decompile": false
 }
 ```
 
@@ -231,6 +235,9 @@ This lets Claude Code discover and read dependency APIs without you having to lo
 | `decompiler_jar` | Explicit path to the decompiler JAR. If unset, reads `CFR_JAR` or `VINEFLOWER_JAR` env var |
 | `configurations` | Gradle configurations to resolve |
 | `java_home` | Override `JAVA_HOME` (used to run the decompiler) |
+| `no_decompile` | `false` (default). When `true`, fail instead of decompiling if no source JAR |
+
+CLI flags (`--decompiler`, `--configurations`, `--no-decompile`) override config file values when provided.
 
 ## Requirements
 

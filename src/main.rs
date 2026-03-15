@@ -1,12 +1,13 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use serde::Serialize;
 
 use classpath_surfer::cli;
 use classpath_surfer::error::CliError;
-use classpath_surfer::model::SearchQuery;
+use classpath_surfer::model::{AccessLevel, SearchQuery, SymbolKind};
 use classpath_surfer::output::{self, OutputMode};
+use classpath_surfer::source::decompiler::Decompiler;
 
 #[derive(Parser)]
 #[command(name = "classpath-surfer", version)]
@@ -24,6 +25,18 @@ struct Cli {
     command: Commands,
 }
 
+/// Shared pagination arguments for commands that return lists.
+#[derive(Args)]
+struct Pagination {
+    /// Maximum number of results
+    #[arg(long, default_value_t = 50)]
+    limit: usize,
+
+    /// Number of results to skip (for pagination)
+    #[arg(long, default_value_t = 0)]
+    offset: usize,
+}
+
 #[derive(Subcommand)]
 enum Commands {
     /// Install Gradle init script, default config, and run initial refresh
@@ -32,8 +45,8 @@ enum Commands {
     /// Extract classpath from Gradle and build/update the symbol index
     Refresh {
         /// Gradle configurations to resolve (comma-separated)
-        #[arg(long, default_value = "compileClasspath,runtimeClasspath")]
-        configurations: String,
+        #[arg(long, value_delimiter = ',')]
+        configurations: Vec<String>,
 
         /// Force Gradle re-run and full re-index, ignoring cached state
         #[arg(long)]
@@ -45,9 +58,9 @@ enum Commands {
         /// Symbol name or pattern to search (optional when --dependency is set)
         query: Option<String>,
 
-        /// Filter by symbol type (comma-separated) [possible values: any, class, method, field]
-        #[arg(long, default_value = "any")]
-        r#type: String,
+        /// Filter by symbol type (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        r#type: Vec<SymbolKind>,
 
         /// Treat query as fully qualified name (exact match)
         #[arg(long)]
@@ -57,21 +70,21 @@ enum Commands {
         #[arg(long)]
         regex: bool,
 
-        /// Maximum number of results (default: 20 for agentic/plain, 200 for TUI)
+        /// Maximum number of results (default: 20 for agentic/plain, 50 for TUI)
         #[arg(long)]
         limit: Option<usize>,
 
         /// Number of results to skip (for pagination)
-        #[arg(long, default_value = "0")]
+        #[arg(long, default_value_t = 0)]
         offset: usize,
 
         /// Restrict search to dependencies matching a GAV pattern (e.g., "com.google.*:guava:*")
         #[arg(long)]
         dependency: Option<String>,
 
-        /// Filter by access level (comma-separated) [possible values: public, protected, private, package_private, all]
-        #[arg(long, default_value = "public")]
-        access: String,
+        /// Filter by access level (comma-separated)
+        #[arg(long, value_delimiter = ',', default_values_t = vec![AccessLevel::Public])]
+        access: Vec<AccessLevel>,
 
         /// Filter by configuration scope (e.g., compileClasspath, runtimeClasspath)
         #[arg(long)]
@@ -83,9 +96,9 @@ enum Commands {
         /// Fully qualified name of the symbol
         fqn: String,
 
-        /// Decompiler to use if no source JAR available [possible values: cfr, vineflower]
-        #[arg(long, default_value = "cfr")]
-        decompiler: String,
+        /// Decompiler to use if no source JAR available
+        #[arg(long)]
+        decompiler: Option<Decompiler>,
 
         /// Path to decompiler JAR
         #[arg(long)]
@@ -96,7 +109,7 @@ enum Commands {
         no_decompile: bool,
 
         /// Lines of context before/after the symbol (for method FQNs)
-        #[arg(long, default_value = "25")]
+        #[arg(long, default_value_t = 25)]
         context: usize,
 
         /// Show the full source file instead of focusing on the symbol
@@ -114,13 +127,8 @@ enum Commands {
         #[arg(long)]
         scope: Option<String>,
 
-        /// Maximum number of results
-        #[arg(long, default_value = "50")]
-        limit: usize,
-
-        /// Number of results to skip (for pagination)
-        #[arg(long, default_value = "0")]
-        offset: usize,
+        #[command(flatten)]
+        pagination: Pagination,
     },
 
     /// Show index status
@@ -154,6 +162,8 @@ fn main() {
         }
     };
 
+    let config = classpath_surfer::config::Config::load(&project_dir).unwrap_or_default();
+
     let result = match cli.command {
         Commands::Init => render(
             output_mode,
@@ -165,10 +175,11 @@ fn main() {
             configurations,
             force,
         } => {
-            let configs: Vec<String> = configurations
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .collect();
+            let configs = if configurations.is_empty() {
+                config.configurations.clone()
+            } else {
+                configurations
+            };
             render(
                 output_mode,
                 cli::refresh::run(&project_dir, &configs, force),
@@ -183,8 +194,8 @@ fn main() {
             regex,
             limit,
             offset,
-            dependency,
             access,
+            dependency,
             scope,
         } => {
             // Validate: at least one of query or dependency must be provided
@@ -202,24 +213,23 @@ fn main() {
                 }
             }
 
-            let access_levels: Option<Vec<&str>> = if access == "all" {
-                None
+            let access_levels: Vec<AccessLevel> = if access.contains(&AccessLevel::All) {
+                vec![]
             } else {
-                Some(access.split(',').map(|s| s.trim()).collect())
+                access
             };
-            let access_refs = access_levels.as_deref();
             let is_listing = query.is_none();
 
             if output_mode == OutputMode::Tui {
                 let effective_limit = limit.unwrap_or(50);
                 let sq = SearchQuery {
                     query: query.as_deref(),
-                    symbol_type: &r#type,
+                    symbol_types: &r#type,
                     fqn_mode: fqn,
                     regex_mode: regex,
                     limit: effective_limit,
                     dependency: dependency.as_deref(),
-                    access_levels: access_refs,
+                    access_levels: &access_levels,
                     offset: 0,
                     scope: scope.as_deref(),
                 };
@@ -230,12 +240,12 @@ fn main() {
                 let effective_limit = limit.unwrap_or(20);
                 let sq = SearchQuery {
                     query: query.as_deref(),
-                    symbol_type: &r#type,
+                    symbol_types: &r#type,
                     fqn_mode: fqn,
                     regex_mode: regex,
                     limit: effective_limit,
                     dependency: dependency.as_deref(),
-                    access_levels: access_refs,
+                    access_levels: &access_levels,
                     offset,
                     scope: scope.as_deref(),
                 };
@@ -260,11 +270,13 @@ fn main() {
             context,
             full,
         } => {
+            let effective_decompiler = decompiler.unwrap_or(config.decompiler);
+            let effective_jar = decompiler_jar.or(config.decompiler_jar.clone());
             let opts = cli::show::ShowOptions {
                 fqn: &fqn,
-                decompiler: &decompiler,
-                decompiler_jar: decompiler_jar.as_deref(),
-                no_decompile,
+                decompiler: effective_decompiler,
+                decompiler_jar: effective_jar.as_deref(),
+                no_decompile: no_decompile || config.no_decompile,
                 context,
                 full: full || output_mode == OutputMode::Tui,
             };
@@ -278,8 +290,7 @@ fn main() {
         Commands::Deps {
             filter,
             scope,
-            limit,
-            offset,
+            pagination,
         } => {
             if output_mode == OutputMode::Tui {
                 cli::require_index(&project_dir).and_then(|()| {
@@ -296,8 +307,8 @@ fn main() {
                         &project_dir,
                         filter.as_deref(),
                         scope.as_deref(),
-                        limit,
-                        offset,
+                        pagination.limit,
+                        pagination.offset,
                     ),
                     cli::render::deps,
                     None::<fn(&_) -> anyhow::Result<()>>,

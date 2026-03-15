@@ -11,6 +11,7 @@ pub mod output;
 // Re-export everything so existing `use crate::model::*` paths keep working.
 pub use output::*;
 
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
 /// Grouped signature representations for a symbol.
@@ -211,7 +212,7 @@ pub fn format_lang_display(lang: &str) -> &'static str {
 }
 
 /// The kind of symbol extracted from a classfile.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum SymbolKind {
     /// A class, interface, enum, or annotation type.
@@ -220,6 +221,52 @@ pub enum SymbolKind {
     Method,
     /// A field (instance or static).
     Field,
+}
+
+/// Visibility level of a symbol.
+///
+/// Used for filtering search results by access modifier. The [`All`](AccessLevel::All)
+/// variant disables filtering entirely.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "snake_case")]
+pub enum AccessLevel {
+    /// No access-level filter (return all symbols).
+    All,
+    /// Java `public`.
+    Public,
+    /// Java `protected`.
+    Protected,
+    /// Java `private`.
+    Private,
+    /// Java package-private (no explicit modifier).
+    PackagePrivate,
+}
+
+impl AccessLevel {
+    /// Returns the index-stored string for this level.
+    ///
+    /// Returns `None` for [`AccessLevel::All`] since it represents "no filter".
+    pub fn as_index_str(&self) -> Option<&'static str> {
+        match self {
+            AccessLevel::All => None,
+            AccessLevel::Public => Some("public"),
+            AccessLevel::Protected => Some("protected"),
+            AccessLevel::Private => Some("private"),
+            AccessLevel::PackagePrivate => Some("package_private"),
+        }
+    }
+}
+
+impl std::fmt::Display for AccessLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccessLevel::All => f.write_str("all"),
+            AccessLevel::Public => f.write_str("public"),
+            AccessLevel::Protected => f.write_str("protected"),
+            AccessLevel::Private => f.write_str("private"),
+            AccessLevel::PackagePrivate => f.write_str("package-private"),
+        }
+    }
 }
 
 impl SymbolKind {

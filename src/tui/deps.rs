@@ -115,13 +115,13 @@ pub fn run(project_dir: &Path, filter: Option<&str>, scope: Option<&str>) -> Res
 
                     let query = SearchQuery {
                         query: None,
-                        symbol_type: "any",
+                        symbol_types: &[],
                         fqn_mode: false,
                         regex_mode: false,
                         limit: 50,
                         offset: 0,
                         dependency: Some(selected_gav),
-                        access_levels: None,
+                        access_levels: &[],
                         scope,
                     };
 

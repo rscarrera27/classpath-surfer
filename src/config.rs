@@ -8,6 +8,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::source::decompiler::Decompiler;
+
+/// Default Gradle configurations to resolve.
+pub const DEFAULT_CONFIGURATIONS: &[&str] = &["compileClasspath", "runtimeClasspath"];
+
 /// Per-project configuration stored in `.classpath-surfer/config.json`.
 ///
 /// All fields can also be overridden via CLI flags or environment variables
@@ -15,14 +20,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Decompiler backend to use when no source JAR is available.
-    /// Defaults to `"cfr"`. Also settable via `--decompiler`.
+    /// Defaults to [`Decompiler::Cfr`]. Also settable via `--decompiler`.
     #[serde(default = "default_decompiler")]
-    pub decompiler: String,
+    pub decompiler: Decompiler,
     /// Path to the decompiler JAR. When `None`, the tool looks for `CFR_JAR` or
     /// `VINEFLOWER_JAR` environment variables. Also settable via `--decompiler-jar`.
     pub decompiler_jar: Option<PathBuf>,
     /// Gradle configurations to resolve (e.g. `compileClasspath`, `runtimeClasspath`).
-    /// Also settable via `--configuration`.
+    /// Also settable via `--configurations`.
     #[serde(default = "default_configurations")]
     pub configurations: Vec<String>,
     /// Override for `JAVA_HOME` used when running Gradle. Also settable via `--java-home`.
@@ -33,15 +38,15 @@ pub struct Config {
     pub no_decompile: bool,
 }
 
-fn default_decompiler() -> String {
-    "cfr".to_string()
+fn default_decompiler() -> Decompiler {
+    Decompiler::Cfr
 }
 
 fn default_configurations() -> Vec<String> {
-    vec![
-        "compileClasspath".to_string(),
-        "runtimeClasspath".to_string(),
-    ]
+    DEFAULT_CONFIGURATIONS
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
 }
 
 impl Default for Config {
@@ -60,8 +65,7 @@ impl Config {
     /// Load configuration from `.classpath-surfer/config.json`.
     ///
     /// Returns `Config::default()` when the file does not exist.
-    /// Currently unused — reserved for future config-file workflow.
-    #[allow(dead_code)]
+    /// Returns [`Config::default()`] when the file does not exist.
     pub fn load(project_dir: &Path) -> Result<Self> {
         let config_path = project_dir.join(".classpath-surfer/config.json");
         if config_path.exists() {

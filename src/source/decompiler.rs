@@ -2,8 +2,44 @@ use std::path::Path;
 use std::process::Command;
 
 use anyhow::{Context, Result};
+use clap::ValueEnum;
+use serde::{Deserialize, Serialize};
 
 use crate::error::CliError;
+
+/// Supported decompiler backends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum Decompiler {
+    /// CFR decompiler.
+    Cfr,
+    /// Vineflower (formerly FernFlower) decompiler.
+    Vineflower,
+}
+
+impl Decompiler {
+    /// Returns the lowercase string name (`"cfr"` or `"vineflower"`).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Decompiler::Cfr => "cfr",
+            Decompiler::Vineflower => "vineflower",
+        }
+    }
+
+    /// Returns the environment variable name for the JAR path.
+    pub fn env_var(&self) -> &'static str {
+        match self {
+            Decompiler::Cfr => "CFR_JAR",
+            Decompiler::Vineflower => "VINEFLOWER_JAR",
+        }
+    }
+}
+
+impl std::fmt::Display for Decompiler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
 
 /// Decompile a `.class` file's bytes using an external decompiler.
 ///
@@ -16,7 +52,7 @@ use crate::error::CliError;
 /// (managed by `tempfile`) before invoking the decompiler JAR via `java -jar`.
 pub fn decompile(
     class_bytes: &[u8],
-    decompiler: &str,
+    decompiler: Decompiler,
     decompiler_jar: Option<&Path>,
 ) -> Result<String> {
     let jar_path = decompiler_jar
@@ -35,13 +71,8 @@ pub fn decompile(
     std::fs::write(&class_file, class_bytes)?;
 
     match decompiler {
-        "cfr" => decompile_cfr(&class_file, &jar_path),
-        "vineflower" => decompile_vineflower(&class_file, &jar_path, temp_dir.path()),
-        _ => Err(CliError::usage(
-            "INVALID_ARGUMENT",
-            format!("Unknown decompiler: '{decompiler}'. Use 'cfr' or 'vineflower'."),
-        )
-        .into()),
+        Decompiler::Cfr => decompile_cfr(&class_file, &jar_path),
+        Decompiler::Vineflower => decompile_vineflower(&class_file, &jar_path, temp_dir.path()),
     }
 }
 
@@ -122,15 +153,8 @@ fn find_java_file_recursive(dir: &Path) -> Result<Option<std::path::PathBuf>> {
     Ok(None)
 }
 
-fn find_decompiler_jar(decompiler: &str) -> Option<std::path::PathBuf> {
-    // Check environment variable
-    let env_var = match decompiler {
-        "cfr" => "CFR_JAR",
-        "vineflower" => "VINEFLOWER_JAR",
-        _ => return None,
-    };
-
-    if let Ok(path) = std::env::var(env_var) {
+fn find_decompiler_jar(decompiler: Decompiler) -> Option<std::path::PathBuf> {
+    if let Ok(path) = std::env::var(decompiler.env_var()) {
         let p = std::path::PathBuf::from(path);
         if p.exists() {
             return Some(p);
