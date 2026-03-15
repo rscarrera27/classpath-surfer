@@ -644,3 +644,60 @@ fn scala_clojure_symbols() {
         "clojure.lang.PersistentVector source_language should be 'java' (written in Java)"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Smart search: token AND + auto FQN detection
+// ---------------------------------------------------------------------------
+
+#[test]
+fn smart_search_multi_keyword_and() {
+    let project = require_indexed_project!();
+    let reader = IndexReader::open(&project.index_dir()).unwrap();
+
+    // "immutable list" — both must be substrings
+    let (results, _count) = reader
+        .search(&SearchQuery {
+            query: "immutable list",
+            symbol_type: "class",
+            fqn_mode: false,
+            regex_mode: false,
+            limit: 20,
+            dependency: None,
+            access_levels: None,
+            offset: 0,
+        })
+        .unwrap();
+    assert!(
+        results.iter().any(|r| r.fqn.contains("ImmutableList")),
+        "multi-keyword 'immutable list' should find ImmutableList, got: {:?}",
+        results.iter().map(|r| &r.fqn).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn smart_search_auto_fqn() {
+    let project = require_indexed_project!();
+    let reader = IndexReader::open(&project.index_dir()).unwrap();
+
+    // FQN with 2+ dots should auto-detect as exact FQN match
+    let (results, _count) = reader
+        .search(&SearchQuery {
+            query: "com.google.common.collect.ImmutableList",
+            symbol_type: "class",
+            fqn_mode: false,
+            regex_mode: false,
+            limit: 10,
+            dependency: None,
+            access_levels: None,
+            offset: 0,
+        })
+        .unwrap();
+    assert!(
+        !results.is_empty(),
+        "auto-FQN should find com.google.common.collect.ImmutableList"
+    );
+    assert_eq!(
+        results[0].fqn, "com.google.common.collect.ImmutableList",
+        "first result should be exact FQN match"
+    );
+}

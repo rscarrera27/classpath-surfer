@@ -69,8 +69,9 @@ impl IndexReader {
     ///
     /// Supports three search modes (selected by the boolean flags in [`SearchQuery`]):
     ///
-    /// - **Text search** (default) -- tokenized query against `simple_name` and
-    ///   `name_parts` fields.
+    /// - **Smart search** (default) -- auto-detects FQN queries (2+ dots) for exact
+    ///   match, otherwise token search on `simple_name` and `name_parts` with AND
+    ///   semantics for multi-word queries.
     /// - **FQN mode** (`fqn_mode = true`) -- exact match on the `fqn` field.
     /// - **Regex mode** (`regex_mode = true`) -- regex pattern matched against
     ///   `simple_name`.
@@ -95,7 +96,7 @@ impl IndexReader {
             let simple_name_field = schema.get_field("simple_name").unwrap();
             Box::new(RegexQuery::from_pattern(sq.query, simple_name_field)?)
         } else {
-            // Smart search: auto-detect FQN or combined token+substring
+            // Smart search: auto-detect FQN or token search
             let query_str = sq.query;
 
             if query_str.chars().filter(|&c| c == '.').count() >= 2 {
@@ -106,23 +107,12 @@ impl IndexReader {
                     IndexRecordOption::Basic,
                 ))
             } else {
-                // Combined: token search + substring search
+                // Token search on simple_name + name_parts (AND semantics)
                 let simple_name = schema.get_field("simple_name").unwrap();
                 let name_parts = schema.get_field("name_parts").unwrap();
-
-                // Strategy 1: token-based (BM25 scoring)
-                let mut parser =
-                    QueryParser::for_index(&self.index, vec![simple_name, name_parts]);
+                let mut parser = QueryParser::for_index(&self.index, vec![simple_name, name_parts]);
                 parser.set_conjunction_by_default();
-                let token_query = parser.parse_query(query_str)?;
-
-                // Strategy 2: substring via regex on simple_name
-                let substring_query = build_substring_query(query_str, simple_name)?;
-
-                Box::new(BooleanQuery::new(vec![
-                    (Occur::Should, token_query),
-                    (Occur::Should, substring_query),
-                ]))
+                parser.parse_query(query_str)?
             }
         };
 
