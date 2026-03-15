@@ -13,7 +13,7 @@ use crate::cli;
 use crate::config::Config;
 use crate::index::reader::IndexReader;
 use crate::manifest::ClasspathManifest;
-use crate::model::{SearchQuery, SearchResult, ShowOutput, SymbolKind, format_lang_display};
+use crate::model::{SearchQuery, SearchResult, ShowOutput, format_lang_display};
 use crate::tui::show::{self, HighlightedShowOutput};
 
 /// Minimum terminal width for side-by-side layout.
@@ -193,25 +193,36 @@ pub fn run_interactive(project_dir: &Path, query: &SearchQuery) -> Result<()> {
                     KeyCode::Char('q') | KeyCode::Esc => break,
                     KeyCode::Down | KeyCode::Char('j') => {
                         let i = table_state.selected().unwrap_or(0);
-                        let next = if i >= state.results.len() - 1 {
-                            // At the very end — don't wrap, stay at last item
-                            i
-                        } else {
-                            i + 1
-                        };
-                        table_state.select(Some(next));
 
-                        // Infinite scroll: load more when near the bottom
+                        // Infinite scroll: load more BEFORE advancing so the
+                        // cursor can move into the newly loaded results.
                         if state.has_more
-                            && next + LOAD_MORE_THRESHOLD >= state.results.len()
+                            && i + LOAD_MORE_THRESHOLD >= state.results.len()
                             && let Err(e) = state.load_more(&reader, query)
                         {
                             error_message = Some(format!("{e:#}"));
                         }
+
+                        let next = if i >= state.results.len() - 1 {
+                            if state.has_more {
+                                // load_more failed but more exist — stay put
+                                i
+                            } else {
+                                // All loaded — wrap to first
+                                0
+                            }
+                        } else {
+                            i + 1
+                        };
+                        table_state.select(Some(next));
                     }
                     KeyCode::Up | KeyCode::Char('k') => {
                         let i = table_state.selected().unwrap_or(0);
-                        let next = if i == 0 { 0 } else { i - 1 };
+                        let next = if i == 0 {
+                            state.results.len() - 1
+                        } else {
+                            i - 1
+                        };
                         table_state.select(Some(next));
                     }
                     KeyCode::Enter => {
@@ -310,19 +321,8 @@ fn load_show_output(
     let idx = table_state.selected().unwrap_or(0);
     let result = &results[idx];
 
-    // For methods/fields, strip the simple_name to get the class FQN
-    let class_fqn = if result.symbol_kind == SymbolKind::Class {
-        result.fqn.clone()
-    } else {
-        result
-            .fqn
-            .strip_suffix(&format!(".{}", result.simple_name))
-            .unwrap_or(&result.fqn)
-            .to_string()
-    };
-
     let opts = cli::show::ShowOptions {
-        fqn: &class_fqn,
+        fqn: &result.fqn,
         decompiler: &config.decompiler,
         decompiler_jar: config.decompiler_jar.as_deref(),
         no_decompile: config.no_decompile,

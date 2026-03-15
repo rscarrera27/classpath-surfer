@@ -94,13 +94,9 @@ fn decompile_vineflower(
         .into());
     }
 
-    // Vineflower names output after the class (from bytecode), not the input filename.
-    // Find the first .java file in the output directory.
-    let output_file = std::fs::read_dir(&output_dir)
-        .context("reading Vineflower output directory")?
-        .filter_map(|e| e.ok())
-        .find(|e| e.path().extension().is_some_and(|ext| ext == "java"))
-        .map(|e| e.path());
+    // Vineflower recreates the package directory structure in the output directory
+    // (e.g. com/example/Foo.java), so we need to search recursively.
+    let output_file = find_java_file_recursive(&output_dir)?;
 
     match output_file {
         Some(path) => std::fs::read_to_string(&path).context("reading decompiled output"),
@@ -108,6 +104,22 @@ fn decompile_vineflower(
             CliError::general("DECOMPILATION_FAILED", "Vineflower did not produce output").into(),
         ),
     }
+}
+
+/// Recursively search for the first `.java` file in a directory tree.
+fn find_java_file_recursive(dir: &Path) -> Result<Option<std::path::PathBuf>> {
+    for entry in std::fs::read_dir(dir).context("reading Vineflower output directory")? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_java_file_recursive(&path)? {
+                return Ok(Some(found));
+            }
+        } else if path.extension().is_some_and(|ext| ext == "java") {
+            return Ok(Some(path));
+        }
+    }
+    Ok(None)
 }
 
 fn find_decompiler_jar(decompiler: &str) -> Option<std::path::PathBuf> {
