@@ -98,7 +98,7 @@ fn bench_search(c: &mut Criterion) {
         b.iter(|| {
             let _ = reader
                 .search(&SearchQuery {
-                    query: "ImmutableList",
+                    query: Some("ImmutableList"),
                     symbol_type: "any",
                     fqn_mode: false,
                     regex_mode: false,
@@ -116,7 +116,7 @@ fn bench_search(c: &mut Criterion) {
         b.iter(|| {
             let _ = reader
                 .search(&SearchQuery {
-                    query: "com.google.common.collect.ImmutableList",
+                    query: Some("com.google.common.collect.ImmutableList"),
                     symbol_type: "any",
                     fqn_mode: true,
                     regex_mode: false,
@@ -134,7 +134,7 @@ fn bench_search(c: &mut Criterion) {
         b.iter(|| {
             let _ = reader
                 .search(&SearchQuery {
-                    query: "Immutable.*",
+                    query: Some("Immutable.*"),
                     symbol_type: "any",
                     fqn_mode: false,
                     regex_mode: true,
@@ -152,7 +152,7 @@ fn bench_search(c: &mut Criterion) {
         b.iter(|| {
             let _ = reader
                 .search(&SearchQuery {
-                    query: "ImmutableList",
+                    query: Some("ImmutableList"),
                     symbol_type: "class",
                     fqn_mode: false,
                     regex_mode: false,
@@ -170,7 +170,7 @@ fn bench_search(c: &mut Criterion) {
         b.iter(|| {
             let _ = reader
                 .search(&SearchQuery {
-                    query: "ImmutableList",
+                    query: Some("ImmutableList"),
                     symbol_type: "any",
                     fqn_mode: false,
                     regex_mode: false,
