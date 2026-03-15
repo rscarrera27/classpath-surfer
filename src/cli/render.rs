@@ -36,7 +36,7 @@ pub fn search(output: &SearchOutput) {
     let query_display = output.query.as_deref().unwrap_or("*");
 
     if output.results.is_empty() {
-        println!("No results found for '{}'.", query_display);
+        println!("No matches found for '{}'.", query_display);
         return;
     }
 
@@ -239,10 +239,14 @@ pub fn status(output: &StatusOutput) {
 
 /// Render refresh summary as plain text.
 pub fn refresh(output: &RefreshOutput) {
-    println!(
-        "Refresh complete: {} mode, {} dependencies processed, {} symbols indexed.",
-        output.mode, output.dependencies_processed, output.symbols_indexed
-    );
+    if output.mode == "up_to_date" {
+        println!("Nothing to refresh. Index is up to date.");
+    } else {
+        println!(
+            "Refresh complete: {} mode, {} dependencies processed, {} symbols indexed.",
+            output.mode, output.dependencies_processed, output.symbols_indexed
+        );
+    }
 }
 
 /// Render init summary as plain text.
@@ -259,7 +263,7 @@ pub fn clean(output: &CleanOutput) {
         println!("Nothing to clean.");
     } else {
         for item in &output.items_removed {
-            println!("  Removed: {item}");
+            println!("  {item}");
         }
         println!("Clean complete.");
     }
