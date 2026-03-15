@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_macros, unused_imports)]
+#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -182,6 +182,13 @@ pub fn default_configurations() -> Vec<String> {
         "compileClasspath".to_string(),
         "runtimeClasspath".to_string(),
     ]
+}
+
+/// Build a CLI command pre-configured with `--project-dir`.
+pub fn cli_cmd(project_dir: &Path) -> Command {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"));
+    cmd.arg("--project-dir").arg(project_dir);
+    cmd
 }
 
 /// Create a fresh project copy with init (no refresh). Caller owns the TempDir.

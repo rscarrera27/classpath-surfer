@@ -12,6 +12,9 @@ use crate::model::{
     SearchQuery, SearchResult, SignatureDisplay, SourceLanguage, SymbolKind, matches_gav_pattern,
 };
 
+/// Result of GAV filter construction: the Tantivy query clause (if any) and matched GAVs.
+type GavFilter = (Option<Box<dyn tantivy::query::Query>>, Vec<String>);
+
 /// Read-only handle to the Tantivy symbol index.
 pub struct IndexReader {
     index: Index,
@@ -97,151 +100,33 @@ impl IndexReader {
         let searcher = self.reader.searcher();
         let is_listing = sq.query.is_none();
 
-        // Build base query
-        let base_query: Box<dyn tantivy::query::Query> = if let Some(query_str) = sq.query {
-            if sq.fqn_mode {
-                let fqn_field = schema.get_field("fqn").unwrap();
-                Box::new(TermQuery::new(
-                    tantivy::Term::from_field_text(fqn_field, query_str),
-                    IndexRecordOption::Basic,
-                ))
-            } else if sq.regex_mode {
-                let simple_name_field = schema.get_field("simple_name").unwrap();
-                Box::new(RegexQuery::from_pattern(query_str, simple_name_field)?)
-            } else if query_str.chars().filter(|&c| c == '.').count() >= 2 {
-                let fqn_field = schema.get_field("fqn").unwrap();
-                Box::new(TermQuery::new(
-                    tantivy::Term::from_field_text(fqn_field, query_str),
-                    IndexRecordOption::Basic,
-                ))
-            } else {
-                let simple_name = schema.get_field("simple_name").unwrap();
-                let name_parts = schema.get_field("name_parts").unwrap();
-                let mut parser = QueryParser::for_index(&self.index, vec![simple_name, name_parts]);
-                parser.set_conjunction_by_default();
-                let token_query = parser.parse_query(query_str)?;
-
-                // Build prefix queries so that e.g. "murmur" matches "murmur3".
-                // Each query word must prefix-match in at least one search field.
-                let words: Vec<&str> = query_str.split_whitespace().collect();
-                let mut per_word: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
-                for word in &words {
-                    let escaped = regex_escape_term(&word.to_lowercase());
-                    let pattern = format!("{escaped}.*");
-                    let mut field_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> =
-                        Vec::new();
-                    if let Ok(q) = RegexQuery::from_pattern(&pattern, simple_name) {
-                        field_clauses.push((Occur::Should, Box::new(q)));
-                    }
-                    if let Ok(q) = RegexQuery::from_pattern(&pattern, name_parts) {
-                        field_clauses.push((Occur::Should, Box::new(q)));
-                    }
-                    if !field_clauses.is_empty() {
-                        per_word.push((Occur::Must, Box::new(BooleanQuery::new(field_clauses))));
-                    }
-                }
-
-                // Combine: exact token match OR prefix match
-                Box::new(BooleanQuery::new(vec![
-                    (Occur::Should, token_query),
-                    (Occur::Should, Box::new(BooleanQuery::new(per_word))),
-                ]))
-            }
-        } else {
-            Box::new(AllQuery)
-        };
-
         let mut clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = vec![];
-        clauses.push((Occur::Must, base_query));
 
-        // Symbol type filter — supports comma-separated kinds
-        if sq.symbol_type != "any" {
-            let kind_field = schema.get_field("symbol_kind").unwrap();
-            let types: Vec<&str> = sq.symbol_type.split(',').map(|s| s.trim()).collect();
-            if types.len() == 1 {
-                clauses.push((
-                    Occur::Must,
-                    Box::new(TermQuery::new(
-                        tantivy::Term::from_field_text(kind_field, types[0]),
-                        IndexRecordOption::Basic,
-                    )),
-                ));
-            } else {
-                let type_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = types
-                    .iter()
-                    .map(|&t| {
-                        (
-                            Occur::Should,
-                            Box::new(TermQuery::new(
-                                tantivy::Term::from_field_text(kind_field, t),
-                                IndexRecordOption::Basic,
-                            )) as Box<dyn tantivy::query::Query>,
-                        )
-                    })
-                    .collect();
-                clauses.push((Occur::Must, Box::new(BooleanQuery::new(type_clauses))));
-            }
+        // Base query (search mode classification)
+        clauses.push((Occur::Must, build_base_query(&self.index, &schema, sq)?));
+
+        // Symbol type filter
+        if let Some(filter) = build_symbol_type_filter(&schema, sq.symbol_type) {
+            clauses.push((Occur::Must, filter));
         }
 
-        // Dependency GAV filter — supports glob patterns with `*`
+        // Dependency GAV filter
         let matched_gavs = if let Some(dep) = sq.dependency {
-            let gav_field = schema.get_field("gav").unwrap();
-            if dep.contains('*') {
-                // Pattern matching — resolve to list of matching GAVs
-                let all_gavs = self.list_gavs()?;
-                let matching: Vec<String> = all_gavs
-                    .iter()
-                    .filter(|(g, _)| matches_gav_pattern(g, dep))
-                    .map(|(g, _)| g.clone())
-                    .collect();
-                if matching.is_empty() {
-                    return Ok((vec![], 0, Some(vec![])));
-                }
-                let gav_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = matching
-                    .iter()
-                    .map(|g| {
-                        (
-                            Occur::Should,
-                            Box::new(TermQuery::new(
-                                tantivy::Term::from_field_text(gav_field, g),
-                                IndexRecordOption::Basic,
-                            )) as Box<dyn tantivy::query::Query>,
-                        )
-                    })
-                    .collect();
-                clauses.push((Occur::Must, Box::new(BooleanQuery::new(gav_clauses))));
-                Some(matching)
+            let (filter, gavs) = self.build_gav_filter(&schema, dep)?;
+            if let Some(filter) = filter {
+                clauses.push((Occur::Must, filter));
             } else {
-                // Exact GAV match (optimized single TermQuery)
-                clauses.push((
-                    Occur::Must,
-                    Box::new(TermQuery::new(
-                        tantivy::Term::from_field_text(gav_field, dep),
-                        IndexRecordOption::Basic,
-                    )),
-                ));
-                Some(vec![dep.to_string()])
+                // Empty glob match — no results possible
+                return Ok((vec![], 0, Some(vec![])));
             }
+            Some(gavs)
         } else {
             None
         };
 
         // Access level filter
-        if let Some(levels) = sq.access_levels {
-            let al_field = schema.get_field("access_level").unwrap();
-            let level_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = levels
-                .iter()
-                .map(|&level| {
-                    (
-                        Occur::Should,
-                        Box::new(TermQuery::new(
-                            tantivy::Term::from_field_text(al_field, level),
-                            IndexRecordOption::Basic,
-                        )) as Box<dyn tantivy::query::Query>,
-                    )
-                })
-                .collect();
-            clauses.push((Occur::Must, Box::new(BooleanQuery::new(level_clauses))));
+        if let Some(filter) = build_access_level_filter(&schema, sq.access_levels) {
+            clauses.push((Occur::Must, filter));
         }
 
         let combined = BooleanQuery::new(clauses);
@@ -320,6 +205,46 @@ impl IndexReader {
         Ok((results, total_count, matched_gavs))
     }
 
+    /// Build a GAV filter query from a dependency pattern.
+    ///
+    /// Returns a filter with matched GAVs, or a `None` query when a glob
+    /// pattern matches zero GAVs (caller should short-circuit with no results).
+    fn build_gav_filter(&self, schema: &Schema, dep: &str) -> Result<GavFilter> {
+        let gav_field = schema.get_field("gav").unwrap();
+        if dep.contains('*') {
+            let all_gavs = self.list_gavs()?;
+            let matching: Vec<String> = all_gavs
+                .iter()
+                .filter(|(g, _)| matches_gav_pattern(g, dep))
+                .map(|(g, _)| g.clone())
+                .collect();
+            if matching.is_empty() {
+                return Ok((None, vec![]));
+            }
+            let gav_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = matching
+                .iter()
+                .map(|g| {
+                    (
+                        Occur::Should,
+                        Box::new(TermQuery::new(
+                            tantivy::Term::from_field_text(gav_field, g),
+                            IndexRecordOption::Basic,
+                        )) as Box<dyn tantivy::query::Query>,
+                    )
+                })
+                .collect();
+            Ok((Some(Box::new(BooleanQuery::new(gav_clauses))), matching))
+        } else {
+            Ok((
+                Some(Box::new(TermQuery::new(
+                    tantivy::Term::from_field_text(gav_field, dep),
+                    IndexRecordOption::Basic,
+                ))),
+                vec![dep.to_string()],
+            ))
+        }
+    }
+
     /// Return the total number of indexed symbol documents.
     pub fn count_symbols(&self) -> Result<usize> {
         let searcher = self.reader.searcher();
@@ -360,6 +285,134 @@ impl IndexReader {
 
         Ok(results)
     }
+}
+
+/// Classify the search mode and build the base Tantivy query.
+fn build_base_query(
+    index: &Index,
+    schema: &Schema,
+    sq: &SearchQuery,
+) -> Result<Box<dyn tantivy::query::Query>> {
+    let Some(query_str) = sq.query else {
+        return Ok(Box::new(AllQuery));
+    };
+
+    if sq.fqn_mode {
+        let fqn_field = schema.get_field("fqn").unwrap();
+        return Ok(Box::new(TermQuery::new(
+            tantivy::Term::from_field_text(fqn_field, query_str),
+            IndexRecordOption::Basic,
+        )));
+    }
+
+    if sq.regex_mode {
+        let simple_name_field = schema.get_field("simple_name").unwrap();
+        return Ok(Box::new(RegexQuery::from_pattern(
+            query_str,
+            simple_name_field,
+        )?));
+    }
+
+    // Auto-detect FQN (2+ dots)
+    if query_str.chars().filter(|&c| c == '.').count() >= 2 {
+        let fqn_field = schema.get_field("fqn").unwrap();
+        return Ok(Box::new(TermQuery::new(
+            tantivy::Term::from_field_text(fqn_field, query_str),
+            IndexRecordOption::Basic,
+        )));
+    }
+
+    // Smart token search with prefix matching
+    let simple_name = schema.get_field("simple_name").unwrap();
+    let name_parts = schema.get_field("name_parts").unwrap();
+    let mut parser = QueryParser::for_index(index, vec![simple_name, name_parts]);
+    parser.set_conjunction_by_default();
+    let token_query = parser.parse_query(query_str)?;
+
+    // Build prefix queries so that e.g. "murmur" matches "murmur3".
+    // Each query word must prefix-match in at least one search field.
+    let words: Vec<&str> = query_str.split_whitespace().collect();
+    let mut per_word: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+    for word in &words {
+        let escaped = regex_escape_term(&word.to_lowercase());
+        let pattern = format!("{escaped}.*");
+        let mut field_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = Vec::new();
+        if let Ok(q) = RegexQuery::from_pattern(&pattern, simple_name) {
+            field_clauses.push((Occur::Should, Box::new(q)));
+        }
+        if let Ok(q) = RegexQuery::from_pattern(&pattern, name_parts) {
+            field_clauses.push((Occur::Should, Box::new(q)));
+        }
+        if !field_clauses.is_empty() {
+            per_word.push((Occur::Must, Box::new(BooleanQuery::new(field_clauses))));
+        }
+    }
+
+    // Combine: exact token match OR prefix match
+    Ok(Box::new(BooleanQuery::new(vec![
+        (Occur::Should, token_query),
+        (Occur::Should, Box::new(BooleanQuery::new(per_word))),
+    ])))
+}
+
+/// Build a symbol type filter from a comma-separated kinds string.
+///
+/// Returns `None` when `symbol_type` is `"any"` (no filtering needed).
+fn build_symbol_type_filter(
+    schema: &Schema,
+    symbol_type: &str,
+) -> Option<Box<dyn tantivy::query::Query>> {
+    if symbol_type == "any" {
+        return None;
+    }
+
+    let kind_field = schema.get_field("symbol_kind").unwrap();
+    let types: Vec<&str> = symbol_type.split(',').map(|s| s.trim()).collect();
+
+    if types.len() == 1 {
+        Some(Box::new(TermQuery::new(
+            tantivy::Term::from_field_text(kind_field, types[0]),
+            IndexRecordOption::Basic,
+        )))
+    } else {
+        let type_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = types
+            .iter()
+            .map(|&t| {
+                (
+                    Occur::Should,
+                    Box::new(TermQuery::new(
+                        tantivy::Term::from_field_text(kind_field, t),
+                        IndexRecordOption::Basic,
+                    )) as Box<dyn tantivy::query::Query>,
+                )
+            })
+            .collect();
+        Some(Box::new(BooleanQuery::new(type_clauses)))
+    }
+}
+
+/// Build an access level filter from a list of allowed levels.
+///
+/// Returns `None` when `access_levels` is `None` (no filtering needed).
+fn build_access_level_filter(
+    schema: &Schema,
+    access_levels: Option<&[&str]>,
+) -> Option<Box<dyn tantivy::query::Query>> {
+    let levels = access_levels?;
+    let al_field = schema.get_field("access_level").unwrap();
+    let level_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = levels
+        .iter()
+        .map(|&level| {
+            (
+                Occur::Should,
+                Box::new(TermQuery::new(
+                    tantivy::Term::from_field_text(al_field, level),
+                    IndexRecordOption::Basic,
+                )) as Box<dyn tantivy::query::Query>,
+            )
+        })
+        .collect();
+    Some(Box::new(BooleanQuery::new(level_clauses)))
 }
 
 fn doc_to_search_result(schema: &Schema, doc: &tantivy::TantivyDocument) -> SearchResult {

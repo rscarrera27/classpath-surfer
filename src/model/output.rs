@@ -39,6 +39,31 @@ pub struct SearchQuery<'a> {
     pub scope: Option<&'a str>,
 }
 
+impl<'a> SearchQuery<'a> {
+    /// Create a search query with default options.
+    pub fn simple(query: &'a str) -> Self {
+        Self {
+            query: Some(query),
+            symbol_type: "any",
+            fqn_mode: false,
+            regex_mode: false,
+            limit: 20,
+            offset: 0,
+            dependency: None,
+            access_levels: None,
+            scope: None,
+        }
+    }
+
+    /// Create a search query filtered to a specific symbol type.
+    pub fn with_type(query: &'a str, symbol_type: &'a str) -> Self {
+        Self {
+            symbol_type,
+            ..Self::simple(query)
+        }
+    }
+}
+
 /// Structured output for the `search` command.
 #[derive(Debug, Serialize)]
 pub struct SearchOutput {

@@ -1,6 +1,6 @@
 mod common;
 
-use std::process::Command;
+use std::path::Path;
 
 use common::require_indexed_project;
 
@@ -11,14 +11,8 @@ use common::require_indexed_project;
 #[test]
 fn agentic_search_json_output() {
     let project = require_indexed_project!();
-    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
-        .args([
-            "search",
-            "ImmutableList",
-            "--agentic",
-            "--project-dir",
-            &project.project_dir.to_string_lossy(),
-        ])
+    let output = common::cli_cmd(&project.project_dir)
+        .args(["search", "ImmutableList", "--agentic"])
         .output()
         .unwrap();
 
@@ -37,14 +31,8 @@ fn agentic_search_json_output() {
 
 #[test]
 fn agentic_error_json_format() {
-    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
-        .args([
-            "search",
-            "Foo",
-            "--agentic",
-            "--project-dir",
-            "/tmp/nonexistent-classpath-surfer-test",
-        ])
+    let output = common::cli_cmd(Path::new("/tmp/nonexistent-classpath-surfer-test"))
+        .args(["search", "Foo", "--agentic"])
         .output()
         .unwrap();
 
@@ -62,13 +50,8 @@ fn exit_code_for_missing_index() {
     let project_dir = temp.path().join("empty-project");
     std::fs::create_dir_all(&project_dir).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
-        .args([
-            "search",
-            "Foo",
-            "--project-dir",
-            &project_dir.to_string_lossy(),
-        ])
+    let output = common::cli_cmd(&project_dir)
+        .args(["search", "Foo"])
         .output()
         .unwrap();
 
@@ -82,13 +65,8 @@ fn exit_code_for_missing_index() {
 #[test]
 fn plain_output_to_pipe() {
     let project = require_indexed_project!();
-    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
-        .args([
-            "search",
-            "ImmutableList",
-            "--project-dir",
-            &project.project_dir.to_string_lossy(),
-        ])
+    let output = common::cli_cmd(&project.project_dir)
+        .args(["search", "ImmutableList"])
         .output()
         .unwrap();
 
@@ -105,15 +83,13 @@ fn plain_output_to_pipe() {
 #[test]
 fn access_filter_parsing() {
     let project = require_indexed_project!();
-    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
+    let output = common::cli_cmd(&project.project_dir)
         .args([
             "search",
             "ImmutableList",
             "--agentic",
             "--access",
             "public,protected",
-            "--project-dir",
-            &project.project_dir.to_string_lossy(),
         ])
         .output()
         .unwrap();
@@ -132,13 +108,8 @@ fn access_filter_parsing() {
 #[test]
 fn agentic_status_json_output() {
     let project = require_indexed_project!();
-    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
-        .args([
-            "status",
-            "--agentic",
-            "--project-dir",
-            &project.project_dir.to_string_lossy(),
-        ])
+    let output = common::cli_cmd(&project.project_dir)
+        .args(["status", "--agentic"])
         .output()
         .unwrap();
 
@@ -153,13 +124,8 @@ fn agentic_status_json_output() {
 #[test]
 fn agentic_deps_json_output() {
     let project = require_indexed_project!();
-    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
-        .args([
-            "deps",
-            "--agentic",
-            "--project-dir",
-            &project.project_dir.to_string_lossy(),
-        ])
+    let output = common::cli_cmd(&project.project_dir)
+        .args(["deps", "--agentic"])
         .output()
         .unwrap();
 
@@ -181,14 +147,12 @@ fn agentic_deps_json_output() {
 #[test]
 fn agentic_search_dependency_json_output() {
     let project = require_indexed_project!();
-    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
+    let output = common::cli_cmd(&project.project_dir)
         .args([
             "search",
             "--dependency",
             "com.google.code.gson:gson:*",
             "--agentic",
-            "--project-dir",
-            &project.project_dir.to_string_lossy(),
         ])
         .output()
         .unwrap();
@@ -209,14 +173,8 @@ fn agentic_search_dependency_json_output() {
 
 #[test]
 fn invalid_project_dir_error() {
-    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
-        .args([
-            "search",
-            "Foo",
-            "--agentic",
-            "--project-dir",
-            "/tmp/nonexistent-classpath-surfer-test",
-        ])
+    let output = common::cli_cmd(Path::new("/tmp/nonexistent-classpath-surfer-test"))
+        .args(["search", "Foo", "--agentic"])
         .output()
         .unwrap();
 
@@ -230,7 +188,7 @@ fn invalid_project_dir_error() {
 #[test]
 fn agentic_show_focus_json() {
     let project = require_indexed_project!();
-    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
+    let output = common::cli_cmd(&project.project_dir)
         .args([
             "show",
             "com.google.gson.Gson.fromJson",
@@ -238,8 +196,6 @@ fn agentic_show_focus_json() {
             "--no-decompile",
             "--context",
             "10",
-            "--project-dir",
-            &project.project_dir.to_string_lossy(),
         ])
         .output()
         .unwrap();
@@ -264,15 +220,13 @@ fn agentic_show_focus_json() {
 #[test]
 fn agentic_show_full_flag() {
     let project = require_indexed_project!();
-    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
+    let output = common::cli_cmd(&project.project_dir)
         .args([
             "show",
             "com.google.gson.Gson.fromJson",
             "--agentic",
             "--no-decompile",
             "--full",
-            "--project-dir",
-            &project.project_dir.to_string_lossy(),
         ])
         .output()
         .unwrap();

@@ -34,15 +34,8 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
     // ImmutableList (guava, app module)
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("ImmutableList"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("ImmutableList", "class")
         })
         .expect("search should succeed");
     assert!(
@@ -53,15 +46,8 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
     // StringUtils (commons-lang3, lib module)
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("StringUtils"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("StringUtils", "class")
         })
         .expect("search should succeed");
     assert!(
@@ -72,15 +58,8 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
     // Gson (gson, app module)
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("Gson"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("Gson", "class")
         })
         .expect("search should succeed");
     assert!(
@@ -109,15 +88,8 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
     // 1. Kotlin class should be searchable
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("CoroutineScope"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("CoroutineScope", "class")
         })
         .expect("search should succeed");
     assert!(
@@ -145,15 +117,8 @@ fn run_matrix_test(java_home: &std::path::Path, jdk_version: &str, gradle_versio
     // 4. Kotlin methods should be searchable with signatures
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("cancel"),
-            symbol_type: "method",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 100,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("cancel", "method")
         })
         .expect("search should succeed");
     let kotlin_methods: Vec<_> = results

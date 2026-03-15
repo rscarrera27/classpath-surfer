@@ -18,15 +18,8 @@ fn kotlin_metadata_extraction() {
     // CoroutineScope: should be an interface
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("CoroutineScope"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("CoroutineScope", "class")
         })
         .expect("search should succeed");
     assert!(
@@ -48,15 +41,8 @@ fn kotlin_metadata_extraction() {
     // Deferred: interface with type parameter
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("Deferred"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("Deferred", "class")
         })
         .expect("search should succeed");
     let deferred = results
@@ -70,15 +56,8 @@ fn kotlin_metadata_extraction() {
     // Job: interface
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("Job"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("Job", "class")
         })
         .expect("search should succeed");
     let job = results.iter().find(|r| {
@@ -98,17 +77,7 @@ fn kotlin_jvm_symbols() {
 
     // kotlinx-serialization: Json class
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Json"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Json", "class"))
         .unwrap();
     let json_class = results
         .iter()
@@ -128,17 +97,7 @@ fn kotlin_jvm_symbols() {
 
     // kotlinx-serialization: Serializable annotation (transitive from core)
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Serializable"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Serializable", "class"))
         .unwrap();
     let serializable = results
         .iter()
@@ -150,17 +109,7 @@ fn kotlin_jvm_symbols() {
 
     // Ktor: HttpClient class
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("HttpClient"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("HttpClient", "class"))
         .unwrap();
     let ktor = results.iter().find(|r| r.fqn.contains("io.ktor.client"));
     assert!(ktor.is_some(), "io.ktor.client.HttpClient should be found");
@@ -173,17 +122,7 @@ fn kmp_jvm_symbols() {
 
     // kotlinx-datetime
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Instant"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Instant", "class"))
         .unwrap();
     let instant = results.iter().find(|r| r.fqn.contains("kotlinx.datetime"));
     assert!(
@@ -192,50 +131,20 @@ fn kmp_jvm_symbols() {
     );
 
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Clock"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Clock", "class"))
         .unwrap();
     let clock = results.iter().find(|r| r.fqn.contains("kotlinx.datetime"));
     assert!(clock.is_some(), "kotlinx.datetime.Clock should be found");
 
     // kotlinx-io
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Buffer"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Buffer", "class"))
         .unwrap();
     let buffer = results.iter().find(|r| r.fqn.contains("kotlinx.io"));
     assert!(buffer.is_some(), "kotlinx.io.Buffer should be found");
 
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Source"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Source", "class"))
         .unwrap();
     let source = results.iter().find(|r| r.fqn.contains("kotlinx.io"));
     assert!(source.is_some(), "kotlinx.io.Source should be found");
@@ -247,49 +156,19 @@ fn annotation_processor_symbols() {
     let reader = IndexReader::open(&project.index_dir()).unwrap();
 
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Component"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Component", "class"))
         .unwrap();
     let dagger = results.iter().find(|r| r.fqn == "dagger.Component");
     assert!(dagger.is_some(), "dagger.Component should be found");
 
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Module"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Module", "class"))
         .unwrap();
     let module = results.iter().find(|r| r.fqn == "dagger.Module");
     assert!(module.is_some(), "dagger.Module should be found");
 
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Provides"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Provides", "class"))
         .unwrap();
     let provides = results.iter().find(|r| r.fqn == "dagger.Provides");
     assert!(provides.is_some(), "dagger.Provides should be found");
@@ -302,17 +181,7 @@ fn large_library_symbols() {
 
     // Spring Core
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Environment"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Environment", "class"))
         .unwrap();
     let spring = results.iter().find(|r| r.fqn.contains("springframework"));
     assert!(
@@ -322,17 +191,7 @@ fn large_library_symbols() {
 
     // OkHttp
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("OkHttpClient"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("OkHttpClient", "class"))
         .unwrap();
     let okhttp = results.iter().find(|r| r.fqn.contains("okhttp3"));
     assert!(okhttp.is_some(), "okhttp3.OkHttpClient should be found");
@@ -351,50 +210,20 @@ fn interface_only_symbols() {
 
     // SLF4J
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Logger"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Logger", "class"))
         .unwrap();
     let slf4j = results.iter().find(|r| r.fqn == "org.slf4j.Logger");
     assert!(slf4j.is_some(), "org.slf4j.Logger should be found");
 
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("LoggerFactory"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("LoggerFactory", "class"))
         .unwrap();
     let factory = results.iter().find(|r| r.fqn == "org.slf4j.LoggerFactory");
     assert!(factory.is_some(), "org.slf4j.LoggerFactory should be found");
 
     // Jakarta Servlet
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("HttpServlet"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("HttpServlet", "class"))
         .unwrap();
     let servlet = results.iter().find(|r| r.fqn.contains("jakarta.servlet"));
     assert!(
@@ -403,17 +232,7 @@ fn interface_only_symbols() {
     );
 
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Filter"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Filter", "class"))
         .unwrap();
     let filter = results.iter().find(|r| r.fqn == "jakarta.servlet.Filter");
     assert!(filter.is_some(), "jakarta.servlet.Filter should be found");
@@ -426,15 +245,8 @@ fn search_no_results() {
     let output = cli::search::run(
         &project.project_dir,
         &SearchQuery {
-            query: Some("XyzNonExistentClassName12345"),
-            symbol_type: "any",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::simple("XyzNonExistentClassName12345")
         },
     )
     .expect("search with no results should succeed (not error)");
@@ -451,15 +263,8 @@ fn agentic_search_output_fields() {
     let output = cli::search::run(
         &project.project_dir,
         &SearchQuery {
-            query: Some("ImmutableList"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("ImmutableList", "class")
         },
     )
     .expect("search should succeed");
@@ -531,15 +336,9 @@ fn show_no_source_fails_with_no_decompile() {
         let reader = IndexReader::open(&project.index_dir()).unwrap();
         let (results, _count, _) = reader
             .search(&SearchQuery {
-                query: Some("*"),
-                symbol_type: "class",
-                fqn_mode: false,
-                regex_mode: false,
                 limit: 5,
                 dependency: Some(&dep.gav()),
-                access_levels: None,
-                offset: 0,
-                scope: None,
+                ..SearchQuery::with_type("*", "class")
             })
             .ok()
             .unwrap_or_default();
@@ -610,17 +409,7 @@ fn scala_clojure_symbols() {
 
     // Scala: scala.Option should be indexed with source_language == "scala"
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("Option"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("Option", "class"))
         .expect("search should succeed");
     let scala_option = results
         .iter()
@@ -641,17 +430,7 @@ fn scala_clojure_symbols() {
 
     // Clojure: clojure.lang.PersistentVector is written in Java
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("PersistentVector"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("PersistentVector", "class"))
         .expect("search should succeed");
     let clj_pv = results
         .iter()
@@ -814,15 +593,8 @@ fn search_results_have_scopes() {
 
     let (results, _, _) = reader
         .search(&SearchQuery {
-            query: Some("ImmutableList"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 5,
-            offset: 0,
-            dependency: None,
-            access_levels: None,
-            scope: None,
+            ..SearchQuery::with_type("ImmutableList", "class")
         })
         .expect("search should succeed");
 
@@ -846,17 +618,7 @@ fn smart_search_multi_keyword_and() {
 
     // "immutable list" — both must be substrings
     let (results, _count, _) = reader
-        .search(&SearchQuery {
-            query: Some("immutable list"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
-            limit: 20,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
-        })
+        .search(&SearchQuery::with_type("immutable list", "class"))
         .unwrap();
     assert!(
         results.iter().any(|r| r.fqn.contains("ImmutableList")),
@@ -873,15 +635,8 @@ fn smart_search_auto_fqn() {
     // FQN with 2+ dots should auto-detect as exact FQN match
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("com.google.common.collect.ImmutableList"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("com.google.common.collect.ImmutableList", "class")
         })
         .unwrap();
     assert!(

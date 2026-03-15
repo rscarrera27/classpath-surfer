@@ -26,15 +26,8 @@ fn incremental_indexing() {
     // Verify Gson is found
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("Gson"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("Gson", "class")
         })
         .unwrap();
     assert!(!results.is_empty(), "Gson should be found before removal");
@@ -60,15 +53,8 @@ fn incremental_indexing() {
 
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("Gson"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("Gson", "class")
         })
         .unwrap();
     assert!(
@@ -78,15 +64,8 @@ fn incremental_indexing() {
 
     let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: Some("ImmutableList"),
-            symbol_type: "class",
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
-            dependency: None,
-            access_levels: None,
-            offset: 0,
-            scope: None,
+            ..SearchQuery::with_type("ImmutableList", "class")
         })
         .unwrap();
     assert!(

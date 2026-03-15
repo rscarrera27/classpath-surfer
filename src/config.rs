@@ -60,6 +60,7 @@ impl Config {
     /// Load configuration from `.classpath-surfer/config.json`.
     ///
     /// Returns `Config::default()` when the file does not exist.
+    /// Currently unused — reserved for future config-file workflow.
     #[allow(dead_code)]
     pub fn load(project_dir: &Path) -> Result<Self> {
         let config_path = project_dir.join(".classpath-surfer/config.json");

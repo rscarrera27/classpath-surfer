@@ -97,17 +97,7 @@ fn bench_search(c: &mut Criterion) {
     group.bench_function("simple", |b| {
         b.iter(|| {
             let _ = reader
-                .search(&SearchQuery {
-                    query: Some("ImmutableList"),
-                    symbol_type: "any",
-                    fqn_mode: false,
-                    regex_mode: false,
-                    limit: 20,
-                    dependency: None,
-                    access_levels: None,
-                    offset: 0,
-                    scope: None,
-                })
+                .search(&SearchQuery::simple("ImmutableList"))
                 .unwrap();
         });
     });
@@ -116,15 +106,8 @@ fn bench_search(c: &mut Criterion) {
         b.iter(|| {
             let _ = reader
                 .search(&SearchQuery {
-                    query: Some("com.google.common.collect.ImmutableList"),
-                    symbol_type: "any",
                     fqn_mode: true,
-                    regex_mode: false,
-                    limit: 20,
-                    dependency: None,
-                    access_levels: None,
-                    offset: 0,
-                    scope: None,
+                    ..SearchQuery::simple("com.google.common.collect.ImmutableList")
                 })
                 .unwrap();
         });
@@ -134,15 +117,8 @@ fn bench_search(c: &mut Criterion) {
         b.iter(|| {
             let _ = reader
                 .search(&SearchQuery {
-                    query: Some("Immutable.*"),
-                    symbol_type: "any",
-                    fqn_mode: false,
                     regex_mode: true,
-                    limit: 20,
-                    dependency: None,
-                    access_levels: None,
-                    offset: 0,
-                    scope: None,
+                    ..SearchQuery::simple("Immutable.*")
                 })
                 .unwrap();
         });
@@ -151,17 +127,7 @@ fn bench_search(c: &mut Criterion) {
     group.bench_function("type_filter", |b| {
         b.iter(|| {
             let _ = reader
-                .search(&SearchQuery {
-                    query: Some("ImmutableList"),
-                    symbol_type: "class",
-                    fqn_mode: false,
-                    regex_mode: false,
-                    limit: 20,
-                    dependency: None,
-                    access_levels: None,
-                    offset: 0,
-                    scope: None,
-                })
+                .search(&SearchQuery::with_type("ImmutableList", "class"))
                 .unwrap();
         });
     });
@@ -170,15 +136,8 @@ fn bench_search(c: &mut Criterion) {
         b.iter(|| {
             let _ = reader
                 .search(&SearchQuery {
-                    query: Some("ImmutableList"),
-                    symbol_type: "any",
-                    fqn_mode: false,
-                    regex_mode: false,
-                    limit: 20,
                     dependency: Some("com.google.guava:guava:33.4.0-jre"),
-                    access_levels: None,
-                    offset: 0,
-                    scope: None,
+                    ..SearchQuery::simple("ImmutableList")
                 })
                 .unwrap();
         });

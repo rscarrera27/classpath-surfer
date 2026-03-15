@@ -16,6 +16,8 @@ pub fn type_to_string(desc: &str) -> String {
 
 /// Parse a method descriptor into a human-readable signature.
 ///
+/// Currently unused — reserved for future descriptor display features.
+///
 /// # Examples
 ///
 /// ```
