@@ -90,6 +90,14 @@ enum Commands {
         /// Fail instead of decompiling if no source JAR
         #[arg(long)]
         no_decompile: bool,
+
+        /// Lines of context before/after the symbol (for method FQNs)
+        #[arg(long, default_value = "25")]
+        context: usize,
+
+        /// Show the full source file instead of focusing on the symbol
+        #[arg(long)]
+        full: bool,
     },
 
     /// List indexed dependencies with symbol counts
@@ -240,18 +248,24 @@ fn main() {
             decompiler,
             decompiler_jar,
             no_decompile,
-        } => render(
-            output_mode,
-            cli::show::run(
-                &project_dir,
-                &fqn,
-                &decompiler,
-                decompiler_jar.as_deref(),
+            context,
+            full,
+        } => {
+            let opts = cli::show::ShowOptions {
+                fqn: &fqn,
+                decompiler: &decompiler,
+                decompiler_jar: decompiler_jar.as_deref(),
                 no_decompile,
-            ),
-            cli::render::show,
-            Some(|out: &_| classpath_surfer::tui::show::run(out)),
-        ),
+                context,
+                full: full || output_mode == OutputMode::Tui,
+            };
+            render(
+                output_mode,
+                cli::show::run(&project_dir, &opts),
+                cli::render::show,
+                Some(|out: &_| classpath_surfer::tui::show::run(out)),
+            )
+        }
         Commands::Deps {
             filter,
             limit,

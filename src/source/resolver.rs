@@ -133,8 +133,10 @@ fn find_dependency_for_class<'a>(
     .into())
 }
 
-/// "com.google.common.collect.ImmutableList" → "com/google/common/collect/ImmutableList.class"
-fn fqn_to_class_path(fqn: &str) -> String {
+/// Convert a fully qualified name to a classfile path.
+///
+/// `"com.google.common.collect.ImmutableList"` → `"com/google/common/collect/ImmutableList.class"`
+pub fn fqn_to_class_path(fqn: &str) -> String {
     // Simple approach: replace dots with slashes, but inner class dots after class name become $
     let class_name = fqn.replace('.', "/");
     format!("{class_name}.class")

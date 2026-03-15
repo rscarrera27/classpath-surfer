@@ -5,5 +5,7 @@
 
 /// External decompiler integration (CFR, Vineflower).
 pub mod decompiler;
+/// Method line-number resolution via classfile `LineNumberTable`.
+pub mod locator;
 /// Source code lookup with source-JAR → decompilation fallback.
 pub mod resolver;

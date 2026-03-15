@@ -34,7 +34,13 @@ impl HighlightedShowOutput {
 pub fn run(output: &ShowOutput) -> Result<()> {
     let highlighted = HighlightedShowOutput::from_show_output(output);
     let mut guard = super::TerminalGuard::enter()?;
-    let mut scroll: u16 = 0;
+    let initial_scroll = output
+        .primary
+        .focus
+        .as_ref()
+        .map(|f| (f.symbol_line as u16).saturating_sub(crate::cli::show::FOCUS_TOP_MARGIN))
+        .unwrap_or(0);
+    let mut scroll: u16 = initial_scroll;
     let mut showing_secondary = false;
 
     loop {

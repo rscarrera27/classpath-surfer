@@ -560,14 +560,16 @@ fn show_no_source_fails_with_no_decompile() {
 fn show_with_source_jar() {
     let project = require_indexed_project!();
 
-    let output = cli::show::run(
-        &project.project_dir,
-        "com.google.gson.Gson",
-        "cfr",
-        None,
-        true, // no_decompile
-    )
-    .expect("show should succeed for Gson (has source JAR)");
+    let opts = cli::show::ShowOptions {
+        fqn: "com.google.gson.Gson",
+        decompiler: "cfr",
+        decompiler_jar: None,
+        no_decompile: true,
+        context: 25,
+        full: false,
+    };
+    let output = cli::show::run(&project.project_dir, &opts)
+        .expect("show should succeed for Gson (has source JAR)");
 
     assert_eq!(output.fqn, "com.google.gson.Gson");
     assert!(!output.gav.is_empty());
@@ -828,4 +830,176 @@ fn smart_search_auto_fqn() {
         results[0].fqn, "com.google.common.collect.ImmutableList",
         "first result should be exact FQN match"
     );
+}
+
+#[test]
+fn locator_method_line_from_classfile() {
+    use classpath_surfer::source::locator::find_method_line_from_classfile;
+
+    let project = require_indexed_project!();
+    let manifest = common::read_manifest(&project.project_dir);
+
+    let gson_dep = manifest
+        .all_dependencies()
+        .into_iter()
+        .find(|d| d.gav().contains("gson"))
+        .expect("gson dependency should exist");
+
+    let class_bytes = classpath_surfer::parser::jar::extract_entry(
+        &gson_dep.jar_path,
+        "com/google/gson/Gson.class",
+    )
+    .expect("Gson.class should exist");
+
+    // Regular method
+    let line = find_method_line_from_classfile(&class_bytes, "fromJson");
+    assert!(
+        line.is_some(),
+        "fromJson should have a LineNumberTable entry"
+    );
+    let line = line.unwrap();
+    assert!(line > 1, "fromJson should not be on line 1 (got {line})");
+
+    // Verify via source content
+    if let Some(source_jar) = &gson_dep.source_jar_path {
+        let table = classpath_surfer::parser::jar::build_source_table(source_jar).unwrap();
+        let key = ("com.google.gson".to_string(), "Gson.java".to_string());
+        if let Some(entry) = table.get(&key) {
+            let src_bytes =
+                classpath_surfer::parser::jar::extract_entry(source_jar, &entry.path).unwrap();
+            let src = String::from_utf8_lossy(&src_bytes);
+            let src_line = src.lines().nth(line - 1).unwrap_or("");
+            assert!(
+                src_line.contains("fromJson"),
+                "Line {line} should contain 'fromJson', got: {src_line}"
+            );
+        }
+    }
+
+    // Constructor
+    let ctor_line = find_method_line_from_classfile(&class_bytes, "<init>");
+    assert!(
+        ctor_line.is_some(),
+        "constructor should have a LineNumberTable entry"
+    );
+
+    // Non-existent method
+    let none = find_method_line_from_classfile(&class_bytes, "nonExistentMethod");
+    assert!(none.is_none());
+}
+
+// ---------------------------------------------------------------------------
+// show: symbol focusing tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn show_focused_on_method() {
+    let project = require_indexed_project!();
+    let opts = classpath_surfer::cli::show::ShowOptions {
+        fqn: "com.google.gson.Gson.fromJson",
+        decompiler: "cfr",
+        decompiler_jar: None,
+        no_decompile: true,
+        context: 10,
+        full: false,
+    };
+    let output = classpath_surfer::cli::show::run(&project.project_dir, &opts)
+        .expect("show should succeed for Gson.fromJson");
+
+    assert_eq!(output.fqn, "com.google.gson.Gson.fromJson");
+    assert_eq!(output.symbol_name.as_deref(), Some("fromJson"));
+
+    let focus = output
+        .primary
+        .focus
+        .as_ref()
+        .expect("focus should be present");
+    assert!(focus.symbol_line > 0);
+    assert!(focus.start_line <= focus.symbol_line);
+    assert!(focus.end_line >= focus.symbol_line);
+    assert!(focus.total_lines > focus.end_line);
+    assert!(output.primary.content.contains("fromJson"));
+    assert!(output.primary.line_count < focus.total_lines);
+
+    // source_path should have #L fragment
+    let path = output.primary.source.source_path().unwrap();
+    assert!(
+        path.contains("#L"),
+        "source_path should contain #L fragment, got: {path}"
+    );
+}
+
+#[test]
+fn show_focused_on_constructor() {
+    let project = require_indexed_project!();
+    let opts = classpath_surfer::cli::show::ShowOptions {
+        fqn: "com.google.gson.Gson.Gson",
+        decompiler: "cfr",
+        decompiler_jar: None,
+        no_decompile: true,
+        context: 10,
+        full: false,
+    };
+    let output = classpath_surfer::cli::show::run(&project.project_dir, &opts)
+        .expect("show should succeed for Gson constructor");
+
+    assert_eq!(output.symbol_name.as_deref(), Some("Gson"));
+    let focus = output
+        .primary
+        .focus
+        .as_ref()
+        .expect("focus should be present");
+    assert!(focus.symbol_line > 0);
+}
+
+#[test]
+fn show_class_fqn_no_focus() {
+    let project = require_indexed_project!();
+    let opts = classpath_surfer::cli::show::ShowOptions {
+        fqn: "com.google.gson.Gson",
+        decompiler: "cfr",
+        decompiler_jar: None,
+        no_decompile: true,
+        context: 25,
+        full: false,
+    };
+    let output = classpath_surfer::cli::show::run(&project.project_dir, &opts)
+        .expect("show should succeed for Gson class");
+
+    assert_eq!(output.fqn, "com.google.gson.Gson");
+    assert!(output.symbol_name.is_none());
+    assert!(output.primary.focus.is_none());
+    assert!(output.primary.content.contains("class Gson"));
+}
+
+#[test]
+fn show_method_with_full_flag() {
+    let project = require_indexed_project!();
+    let opts = classpath_surfer::cli::show::ShowOptions {
+        fqn: "com.google.gson.Gson.fromJson",
+        decompiler: "cfr",
+        decompiler_jar: None,
+        no_decompile: true,
+        context: 10,
+        full: true,
+    };
+    let output = classpath_surfer::cli::show::run(&project.project_dir, &opts)
+        .expect("show should succeed for Gson.fromJson with --full");
+
+    assert_eq!(output.symbol_name.as_deref(), Some("fromJson"));
+    let focus = output
+        .primary
+        .focus
+        .as_ref()
+        .expect("focus should exist for --full");
+    assert_eq!(focus.start_line, 1);
+    assert_eq!(focus.end_line, focus.total_lines);
+    assert_eq!(output.primary.line_count, focus.total_lines);
+
+    if let Some(path) = output.primary.source.source_path() {
+        assert!(
+            !path.contains("#L"),
+            "full mode should not have #L fragment"
+        );
+    }
 }

@@ -55,11 +55,31 @@ pub struct ShowOutput {
     pub fqn: String,
     /// Maven GAV coordinates of the dependency containing this class.
     pub gav: String,
+    /// The symbol's simple name, if showing a member (method/field).
+    /// `None` when showing a full class.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symbol_name: Option<String>,
     /// Primary source view (source or decompiler).
     pub primary: SourceView,
     /// Optional secondary view (e.g. decompiler Java for Kotlin sources).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secondary: Option<SourceView>,
+}
+
+/// Focus metadata for windowed source display.
+///
+/// Used internally by TUI (scroll) and plain renderer (line numbering).
+/// Not included in JSON output — `source_path#L` fragment serves that role.
+#[derive(Debug)]
+pub struct FocusInfo {
+    /// 1-based line number of the symbol definition in the original source.
+    pub symbol_line: usize,
+    /// 1-based start line of the displayed window.
+    pub start_line: usize,
+    /// 1-based end line of the displayed window (inclusive).
+    pub end_line: usize,
+    /// Total number of lines in the original source file.
+    pub total_lines: usize,
 }
 
 /// A single source-code view within [`ShowOutput`].
@@ -74,6 +94,11 @@ pub struct SourceView {
     pub source: SourceOrigin,
     /// Number of lines in the source content.
     pub line_count: usize,
+    /// Focus metadata — used internally by TUI (scroll position) and plain
+    /// renderer (line numbering).  Not serialized to JSON; the `source_path`
+    /// `#L` fragment already encodes the visible range for external consumers.
+    #[serde(skip)]
+    pub focus: Option<FocusInfo>,
 }
 
 /// Structured output for the `status` command.

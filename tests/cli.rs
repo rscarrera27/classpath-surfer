@@ -225,3 +225,63 @@ fn invalid_project_dir_error() {
     assert_eq!(json["success"], false);
     assert!(json["error_code"].is_string());
 }
+
+#[test]
+fn agentic_show_focus_json() {
+    let project = require_indexed_project!();
+    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
+        .args([
+            "show",
+            "com.google.gson.Gson.fromJson",
+            "--agentic",
+            "--no-decompile",
+            "--context",
+            "10",
+            "--project-dir",
+            &project.project_dir.to_string_lossy(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    assert_eq!(json["fqn"], "com.google.gson.Gson.fromJson");
+    assert_eq!(json["symbol_name"], "fromJson");
+    // focus is internal-only (serde(skip)), verify via source_path #L fragment
+    let path = json["primary"]["source_path"].as_str().unwrap();
+    assert!(
+        path.contains("#L"),
+        "source_path should have #L fragment: {path}"
+    );
+    // focus should NOT appear in JSON
+    assert!(
+        json["primary"]["focus"].is_null(),
+        "focus should not be in JSON"
+    );
+}
+
+#[test]
+fn agentic_show_full_flag() {
+    let project = require_indexed_project!();
+    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
+        .args([
+            "show",
+            "com.google.gson.Gson.fromJson",
+            "--agentic",
+            "--no-decompile",
+            "--full",
+            "--project-dir",
+            &project.project_dir.to_string_lossy(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("valid JSON");
+    // --full: source_path should NOT have #L fragment
+    let path = json["primary"]["source_path"].as_str().unwrap();
+    assert!(
+        !path.contains("#L"),
+        "full mode should not have #L fragment: {path}"
+    );
+}

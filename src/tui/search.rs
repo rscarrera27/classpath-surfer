@@ -280,10 +280,16 @@ struct ShowViewState {
 impl ShowViewState {
     fn new(output: ShowOutput) -> Self {
         let highlighted = HighlightedShowOutput::from_show_output(&output);
+        let scroll = output
+            .primary
+            .focus
+            .as_ref()
+            .map(|f| (f.symbol_line as u16).saturating_sub(crate::cli::show::FOCUS_TOP_MARGIN))
+            .unwrap_or(0);
         Self {
             output,
             highlighted,
-            scroll: 0,
+            scroll,
             showing_secondary: false,
         }
     }
@@ -315,23 +321,19 @@ fn load_show_output(
             .to_string()
     };
 
+    let opts = cli::show::ShowOptions {
+        fqn: &class_fqn,
+        decompiler: &config.decompiler,
+        decompiler_jar: config.decompiler_jar.as_deref(),
+        no_decompile: config.no_decompile,
+        context: 50,
+        full: true,
+    };
+
     if let Some(m) = manifest {
-        cli::show::load_show_output(
-            project_dir,
-            m,
-            &class_fqn,
-            &config.decompiler,
-            config.decompiler_jar.as_deref(),
-            config.no_decompile,
-        )
+        cli::show::load_show_output_focused(project_dir, m, &opts)
     } else {
-        cli::show::run(
-            project_dir,
-            &class_fqn,
-            &config.decompiler,
-            config.decompiler_jar.as_deref(),
-            config.no_decompile,
-        )
+        cli::show::run(project_dir, &opts)
     }
 }
 

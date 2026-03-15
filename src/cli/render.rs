@@ -137,7 +137,20 @@ pub fn show(output: &ShowOutput) {
     };
     eprintln!("// {source_label}");
     eprintln!("// GAV: {}", output.gav);
-    println!("{}", output.primary.content);
+
+    if let Some(focus) = &output.primary.focus {
+        let name = output.symbol_name.as_deref().unwrap_or(&output.fqn);
+        eprintln!(
+            "// Lines {}-{} of {} (focused on '{name}')",
+            focus.start_line, focus.end_line, focus.total_lines,
+        );
+        for (i, line) in output.primary.content.lines().enumerate() {
+            let line_num = focus.start_line + i;
+            println!("{line_num:>5} | {line}");
+        }
+    } else {
+        println!("{}", output.primary.content);
+    }
 
     if let Some(secondary) = &output.secondary {
         eprintln!();
