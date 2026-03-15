@@ -209,7 +209,7 @@ classpath-surfer ships as a [Claude Code plugin](https://claude.ai/claude-code) 
 
 ```bash
 # Inside Claude Code
-/plugin marketplace add github.com/rscarrera27/classpath-surfer
+/plugin marketplace add https://github.com/rscarrera27/classpath-surfer
 /plugin install classpath-surfer
 ```
 

@@ -210,7 +210,7 @@ classpath-surfer는 [Claude Code 플러그인](https://claude.ai/claude-code)으
 
 ```bash
 # Claude Code 내에서
-/plugin marketplace add github.com/rscarrera27/classpath-surfer
+/plugin marketplace add https://github.com/rscarrera27/classpath-surfer
 /plugin install classpath-surfer
 ```
 
