@@ -34,8 +34,9 @@ pub const FOCUS_TOP_MARGIN: u16 = 5;
 
 /// Retrieve source code for a symbol and return structured output.
 ///
-/// Supports class, method, and field FQNs. For methods with a source JAR,
-/// focuses the output around the method definition using `LineNumberTable`.
+/// Supports class, method, and field FQNs. For methods and fields with a
+/// source JAR, focuses the output around the symbol definition using
+/// `LineNumberTable` (fields use their getter method's line number as proxy).
 pub fn run(project_dir: &Path, opts: &ShowOptions<'_>) -> Result<ShowOutput> {
     super::require_manifest(project_dir)?;
 
@@ -88,13 +89,21 @@ fn run_with_manifest(
     )?;
     output.fqn = opts.fqn.to_string();
 
-    // 4. Focus only for methods with source JAR
-    if let Some((simple_name, SymbolKind::Method)) = member
+    // 4. Focus for methods and fields with source
+    if let Some((simple_name, kind)) = member
         && output.primary.source.has_source()
     {
         output.symbol_name = Some(simple_name.to_string());
 
-        let symbol_line = resolve_method_line(manifest, &output.gav, &class_fqn, simple_name);
+        let symbol_line = match kind {
+            SymbolKind::Method => {
+                resolve_method_line(manifest, &output.gav, &class_fqn, simple_name)
+            }
+            SymbolKind::Field => {
+                resolve_field_line(manifest, &output.gav, &class_fqn, simple_name)
+            }
+            _ => None,
+        };
 
         if opts.full {
             set_focus_metadata(&mut output.primary, symbol_line);
@@ -140,6 +149,20 @@ pub fn load_show_output(
     })
 }
 
+/// Extract class bytes for a given GAV and class FQN.
+fn extract_class_bytes(
+    manifest: &ClasspathManifest,
+    gav: &str,
+    class_fqn: &str,
+) -> Option<Vec<u8>> {
+    let class_path = resolver::fqn_to_class_path(class_fqn);
+    let dep = manifest
+        .all_dependencies()
+        .into_iter()
+        .find(|d| d.gav() == gav)?;
+    jar::extract_entry(&dep.jar_path, &class_path).ok()
+}
+
 /// Extract method line from classfile `LineNumberTable`.
 fn resolve_method_line(
     manifest: &ClasspathManifest,
@@ -147,22 +170,52 @@ fn resolve_method_line(
     class_fqn: &str,
     simple_name: &str,
 ) -> Option<usize> {
-    let class_path = resolver::fqn_to_class_path(class_fqn);
-    let dep = manifest
-        .all_dependencies()
-        .into_iter()
-        .find(|d| d.gav() == gav)?;
-    let class_bytes = jar::extract_entry(&dep.jar_path, &class_path).ok()?;
+    let class_bytes = extract_class_bytes(manifest, gav, class_fqn)?;
 
-    // Constructors: index stores class simple name, classfile uses "<init>"
+    // Constructors: index stores class simple name (with $ replaced by .),
+    // classfile uses "<init>". Normalize $ → . for comparison.
     let class_simple = class_fqn.rsplit('.').next().unwrap_or(class_fqn);
-    let classfile_name = if simple_name == class_simple {
+    let class_simple_normalized = class_simple.replace('$', ".");
+    let classfile_name = if simple_name == class_simple_normalized {
         "<init>"
     } else {
         simple_name
     };
 
     locator::find_method_line_from_classfile(&class_bytes, classfile_name)
+}
+
+/// Extract field line from the classfile by finding its getter method's `LineNumberTable`.
+///
+/// Fields themselves have no line number info, but Kotlin properties generate
+/// getter methods (`getXxx`) whose `LineNumberTable` points to the property
+/// declaration line.
+fn resolve_field_line(
+    manifest: &ClasspathManifest,
+    gav: &str,
+    class_fqn: &str,
+    simple_name: &str,
+) -> Option<usize> {
+    let class_bytes = extract_class_bytes(manifest, gav, class_fqn)?;
+
+    // Try getter method (Kotlin property: val foo → getFoo())
+    let getter = format!(
+        "get{}",
+        simple_name
+            .chars()
+            .next()
+            .map(|c| {
+                let upper: String = c.to_uppercase().collect();
+                format!("{upper}{}", &simple_name[c.len_utf8()..])
+            })
+            .unwrap_or_default()
+    );
+    if let Some(line) = locator::find_method_line_from_classfile(&class_bytes, &getter) {
+        return Some(line);
+    }
+
+    // Try field name directly (Kotlin boolean `isXxx` properties keep the name as-is)
+    locator::find_method_line_from_classfile(&class_bytes, simple_name)
 }
 
 /// Set focus metadata without truncating content (--full / TUI mode).
