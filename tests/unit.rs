@@ -183,6 +183,70 @@ fn clean_command() {
 }
 
 // ---------------------------------------------------------------------------
+// GAV pattern matching
+// ---------------------------------------------------------------------------
+
+#[test]
+fn gav_pattern_exact_match() {
+    assert!(cli::matches_gav_pattern(
+        "com.google.guava:guava:33.0-jre",
+        "com.google.guava:guava:33.0-jre"
+    ));
+    assert!(!cli::matches_gav_pattern(
+        "com.google.guava:guava:33.0-jre",
+        "com.google.guava:guava:34.0-jre"
+    ));
+}
+
+#[test]
+fn gav_pattern_wildcard_version() {
+    assert!(cli::matches_gav_pattern(
+        "com.google.guava:guava:33.0-jre",
+        "com.google.guava:guava:*"
+    ));
+    assert!(!cli::matches_gav_pattern(
+        "io.netty:netty-all:4.1",
+        "com.google.guava:guava:*"
+    ));
+}
+
+#[test]
+fn gav_pattern_wildcard_group() {
+    assert!(cli::matches_gav_pattern(
+        "com.google.guava:guava:33.0-jre",
+        "com.google.*:*"
+    ));
+    assert!(cli::matches_gav_pattern(
+        "com.google.code.gson:gson:2.11",
+        "com.google.*:*"
+    ));
+    assert!(!cli::matches_gav_pattern(
+        "io.netty:netty-all:4.1",
+        "com.google.*:*"
+    ));
+}
+
+#[test]
+fn gav_pattern_wildcard_artifact() {
+    assert!(cli::matches_gav_pattern(
+        "io.netty:netty-all:4.1",
+        "*:netty-*:*"
+    ));
+    assert!(!cli::matches_gav_pattern(
+        "com.google.guava:guava:33.0",
+        "*:netty-*:*"
+    ));
+}
+
+#[test]
+fn gav_pattern_star_only() {
+    assert!(cli::matches_gav_pattern(
+        "com.google.guava:guava:33.0-jre",
+        "*"
+    ));
+}
+
+// ---------------------------------------------------------------------------
 // Error case tests (no JDK required)
 // ---------------------------------------------------------------------------
 

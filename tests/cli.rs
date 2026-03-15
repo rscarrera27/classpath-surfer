@@ -151,6 +151,62 @@ fn agentic_status_json_output() {
 }
 
 #[test]
+fn agentic_deps_json_output() {
+    let project = require_indexed_project!();
+    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
+        .args([
+            "deps",
+            "--agentic",
+            "--project-dir",
+            &project.project_dir.to_string_lossy(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "exit code should be 0, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .expect("stdout should be valid JSON in agentic mode");
+    assert!(json["total_count"].as_u64().unwrap() > 0);
+    assert!(json["dependencies"].as_array().unwrap().len() > 0);
+    let first = &json["dependencies"][0];
+    assert!(first["gav"].is_string());
+    assert!(first["symbol_count"].is_u64());
+}
+
+#[test]
+fn agentic_list_json_output() {
+    let project = require_indexed_project!();
+    let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
+        .args([
+            "list",
+            "com.google.code.gson:gson:*",
+            "--agentic",
+            "--project-dir",
+            &project.project_dir.to_string_lossy(),
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "exit code should be 0, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .expect("stdout should be valid JSON in agentic mode");
+    assert!(json["gav_pattern"].is_string());
+    assert!(!json["matched_gavs"].as_array().unwrap().is_empty());
+    assert!(json["total_symbols"].as_u64().unwrap() > 0);
+    assert!(!json["symbols"].as_array().unwrap().is_empty());
+}
+
+#[test]
 fn invalid_project_dir_error() {
     let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
         .args([

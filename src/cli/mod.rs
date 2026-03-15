@@ -11,6 +11,11 @@ use anyhow::Result;
 use crate::error::CliError;
 use crate::staleness;
 
+/// List indexed dependencies with symbol counts.
+pub mod deps;
+/// List all symbols for matching dependencies.
+pub mod list;
+
 /// Remove index data and staleness markers.
 pub mod clean;
 /// Project initialization (config, Gradle init script).
@@ -71,4 +76,23 @@ fn check_staleness(project_dir: &Path) -> Result<()> {
         .into());
     }
     Ok(())
+}
+
+/// Test whether a GAV string matches a glob-like pattern.
+///
+/// `*` is treated as a wildcard matching any sequence of characters;
+/// all other characters are matched literally (case-sensitive).
+///
+/// # Examples
+///
+/// ```ignore
+/// matches_gav_pattern("com.google.guava:guava:33.0-jre", "com.google.*:*")  // true
+/// matches_gav_pattern("io.netty:netty-all:4.1", "*:netty-*:*")             // true
+/// ```
+pub fn matches_gav_pattern(gav: &str, pattern: &str) -> bool {
+    let escaped = regex::escape(pattern);
+    let regex_str = format!("^{}$", escaped.replace(r"\*", ".*"));
+    regex::Regex::new(&regex_str)
+        .map(|re| re.is_match(gav))
+        .unwrap_or(false)
 }

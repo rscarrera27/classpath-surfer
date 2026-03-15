@@ -92,6 +92,43 @@ enum Commands {
         no_decompile: bool,
     },
 
+    /// List indexed dependencies with symbol counts
+    Deps {
+        /// Filter dependencies by GAV pattern (e.g., "com.google.*:*")
+        #[arg(long)]
+        filter: Option<String>,
+
+        /// Maximum number of results
+        #[arg(long, default_value = "50")]
+        limit: usize,
+
+        /// Number of results to skip (for pagination)
+        #[arg(long, default_value = "0")]
+        offset: usize,
+    },
+
+    /// List all symbols for matching dependencies
+    List {
+        /// GAV pattern (e.g., "com.google.guava:guava:*")
+        gav_pattern: String,
+
+        /// Filter by symbol type (comma-separated) [possible values: any, class, method, field]
+        #[arg(long, default_value = "class,method")]
+        r#type: String,
+
+        /// Filter by access level (comma-separated) [possible values: public, protected, private, package_private, all]
+        #[arg(long, default_value = "public")]
+        access: String,
+
+        /// Maximum number of results
+        #[arg(long, default_value = "50")]
+        limit: usize,
+
+        /// Number of results to skip (for pagination)
+        #[arg(long, default_value = "0")]
+        offset: usize,
+    },
+
     /// Show index status
     Status,
 
@@ -215,6 +252,44 @@ fn main() {
             cli::render::show,
             Some(|out: &_| classpath_surfer::tui::show::run(out)),
         ),
+        Commands::Deps {
+            filter,
+            limit,
+            offset,
+        } => render(
+            output_mode,
+            cli::deps::run(&project_dir, filter.as_deref(), limit, offset),
+            cli::render::deps,
+            None::<fn(&_) -> anyhow::Result<()>>,
+        ),
+        Commands::List {
+            gav_pattern,
+            r#type,
+            access,
+            limit,
+            offset,
+        } => {
+            let types: Vec<&str> = r#type.split(',').map(|s| s.trim()).collect();
+            let access_levels: Option<Vec<&str>> = if access == "all" {
+                None
+            } else {
+                Some(access.split(',').map(|s| s.trim()).collect())
+            };
+            let access_refs = access_levels.as_deref();
+            render(
+                output_mode,
+                cli::list::run(
+                    &project_dir,
+                    &gav_pattern,
+                    &types,
+                    access_refs,
+                    limit,
+                    offset,
+                ),
+                cli::render::list,
+                None::<fn(&_) -> anyhow::Result<()>>,
+            )
+        }
         Commands::Status => render(
             output_mode,
             cli::status::run(&project_dir),

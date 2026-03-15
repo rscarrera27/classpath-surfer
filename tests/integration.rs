@@ -646,6 +646,134 @@ fn scala_clojure_symbols() {
 }
 
 // ---------------------------------------------------------------------------
+// deps: list dependencies
+// ---------------------------------------------------------------------------
+
+#[test]
+fn deps_lists_all_dependencies() {
+    let project = require_indexed_project!();
+    let output = cli::deps::run(&project.project_dir, None, 200, 0).expect("deps should succeed");
+    assert!(
+        output.total_count > 0,
+        "should have at least one dependency"
+    );
+    assert!(!output.dependencies.is_empty());
+    for dep in &output.dependencies {
+        assert!(
+            dep.symbol_count > 0,
+            "each dep should have symbols: {}",
+            dep.gav
+        );
+    }
+}
+
+#[test]
+fn deps_filter() {
+    let project = require_indexed_project!();
+    let output = cli::deps::run(&project.project_dir, Some("com.google.*:*"), 200, 0)
+        .expect("deps with filter should succeed");
+    assert!(
+        output.total_count > 0,
+        "should have at least one com.google dependency"
+    );
+    for dep in &output.dependencies {
+        assert!(
+            dep.gav.starts_with("com.google."),
+            "filtered dep should match: {}",
+            dep.gav
+        );
+    }
+}
+
+#[test]
+fn deps_pagination() {
+    let project = require_indexed_project!();
+    let output = cli::deps::run(&project.project_dir, None, 2, 0)
+        .expect("deps with small limit should succeed");
+    assert!(output.dependencies.len() <= 2);
+    if output.total_count > 2 {
+        assert!(output.has_more, "should have more results");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// list: list symbols for a dependency
+// ---------------------------------------------------------------------------
+
+#[test]
+fn list_symbols_for_dependency() {
+    let project = require_indexed_project!();
+    let output = cli::list::run(
+        &project.project_dir,
+        "com.google.code.gson:gson:*",
+        &["class", "method"],
+        Some(&["public"]),
+        50,
+        0,
+    )
+    .expect("list should succeed");
+    assert!(
+        !output.matched_gavs.is_empty(),
+        "should match at least one GAV"
+    );
+    assert!(
+        !output.symbols.is_empty(),
+        "gson should have public symbols"
+    );
+}
+
+#[test]
+fn list_default_type_filter() {
+    let project = require_indexed_project!();
+    let output = cli::list::run(
+        &project.project_dir,
+        "com.google.code.gson:gson:*",
+        &["class", "method"],
+        Some(&["public"]),
+        200,
+        0,
+    )
+    .expect("list should succeed");
+    for sym in &output.symbols {
+        assert!(
+            sym.symbol_kind == classpath_surfer::model::SymbolKind::Class
+                || sym.symbol_kind == classpath_surfer::model::SymbolKind::Method,
+            "only class/method should be returned, got: {:?}",
+            sym.symbol_kind
+        );
+    }
+}
+
+#[test]
+fn list_pagination() {
+    let project = require_indexed_project!();
+    let page1 = cli::list::run(
+        &project.project_dir,
+        "com.google.code.gson:gson:*",
+        &["class", "method"],
+        Some(&["public"]),
+        5,
+        0,
+    )
+    .expect("list page 1 should succeed");
+
+    if page1.total_symbols > 5 {
+        assert!(page1.has_more, "should have more results");
+
+        let page2 = cli::list::run(
+            &project.project_dir,
+            "com.google.code.gson:gson:*",
+            &["class", "method"],
+            Some(&["public"]),
+            5,
+            5,
+        )
+        .expect("list page 2 should succeed");
+        assert!(!page2.symbols.is_empty(), "page 2 should have results");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Smart search: token AND + auto FQN detection
 // ---------------------------------------------------------------------------
 

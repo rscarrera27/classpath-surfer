@@ -4,8 +4,8 @@
 //! was previously inlined in each handler, used when stdout is not a TTY.
 
 use crate::model::{
-    CleanOutput, InitOutput, RefreshOutput, SearchOutput, ShowOutput, StatusOutput,
-    format_lang_display,
+    CleanOutput, DepsOutput, InitOutput, ListOutput, RefreshOutput, SearchOutput, ShowOutput,
+    StatusOutput, format_lang_display,
 };
 
 /// Render search results as a plain-text ASCII table.
@@ -200,6 +200,52 @@ pub fn clean(output: &CleanOutput) {
             println!("  Removed: {item}");
         }
         println!("Clean complete.");
+    }
+}
+
+/// Render dependency list as plain text.
+pub fn deps(output: &DepsOutput) {
+    if output.dependencies.is_empty() {
+        if let Some(ref filter) = output.filter {
+            println!("No dependencies matching '{filter}'.");
+        } else {
+            println!("No dependencies found.");
+        }
+        return;
+    }
+
+    if output.has_more {
+        eprintln!(
+            "Showing {} of {} dependencies. Use --offset {} to see more.",
+            output.dependencies.len(),
+            output.total_count,
+            output.offset + output.dependencies.len()
+        );
+    }
+
+    for dep in &output.dependencies {
+        println!("{} ({} symbols)", dep.gav, dep.symbol_count);
+    }
+}
+
+/// Render symbol list as plain text.
+pub fn list(output: &ListOutput) {
+    if output.symbols.is_empty() {
+        println!("No symbols found for '{}'.", output.gav_pattern);
+        return;
+    }
+
+    if output.has_more {
+        eprintln!(
+            "Showing {} of {} symbols. Use --offset {} to see more.",
+            output.symbols.len(),
+            output.total_symbols,
+            output.offset + output.symbols.len()
+        );
+    }
+
+    for sym in &output.symbols {
+        println!("[{}] {}  {}", sym.symbol_kind, sym.fqn, sym.signature.java);
     }
 }
 

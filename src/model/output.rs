@@ -121,3 +121,49 @@ pub struct CleanOutput {
     /// Descriptions of items that were removed.
     pub items_removed: Vec<String>,
 }
+
+/// Structured output for the `deps` command.
+#[derive(Debug, Serialize)]
+pub struct DepsOutput {
+    /// Filter pattern applied (if any).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<String>,
+    /// Total number of dependencies matching the filter.
+    pub total_count: usize,
+    /// Offset used for this page of results.
+    pub offset: usize,
+    /// Limit used for this page of results.
+    pub limit: usize,
+    /// Whether more results are available beyond this page.
+    pub has_more: bool,
+    /// Dependency entries with symbol counts.
+    pub dependencies: Vec<DepInfo>,
+}
+
+/// A single dependency entry in [`DepsOutput`].
+#[derive(Debug, Serialize)]
+pub struct DepInfo {
+    /// Maven GAV coordinates (`group:artifact:version`).
+    pub gav: String,
+    /// Number of indexed symbols in this dependency.
+    pub symbol_count: usize,
+}
+
+/// Structured output for the `list` command.
+#[derive(Debug, Serialize)]
+pub struct ListOutput {
+    /// GAV pattern used to match dependencies.
+    pub gav_pattern: String,
+    /// GAVs that matched the pattern.
+    pub matched_gavs: Vec<String>,
+    /// Total number of symbols across all matched dependencies.
+    pub total_symbols: usize,
+    /// Offset used for this page of results.
+    pub offset: usize,
+    /// Limit used for this page of results.
+    pub limit: usize,
+    /// Whether more results are available beyond this page.
+    pub has_more: bool,
+    /// Symbols from the matched dependencies.
+    pub symbols: Vec<SearchResult>,
+}
