@@ -175,6 +175,27 @@ impl SourceOrigin {
     }
 }
 
+/// Test whether a GAV string matches a glob-like pattern.
+///
+/// `*` is treated as a wildcard matching any sequence of characters;
+/// all other characters are matched literally (case-sensitive).
+///
+/// # Examples
+///
+/// ```
+/// use classpath_surfer::model::matches_gav_pattern;
+/// assert!(matches_gav_pattern("com.google.guava:guava:33.0-jre", "com.google.*:*"));
+/// assert!(matches_gav_pattern("io.netty:netty-all:4.1", "*:netty-*:*"));
+/// assert!(!matches_gav_pattern("io.netty:netty-all:4.1", "com.google.*:*"));
+/// ```
+pub fn matches_gav_pattern(gav: &str, pattern: &str) -> bool {
+    let escaped = regex::escape(pattern);
+    let regex_str = format!("^{}$", escaped.replace(r"\*", ".*"));
+    regex::Regex::new(&regex_str)
+        .map(|re| re.is_match(gav))
+        .unwrap_or(false)
+}
+
 /// Format a source language string (lowercase) into a capitalized display name.
 ///
 /// Returns `"Java"` for unrecognized or missing language identifiers.
@@ -270,6 +291,9 @@ pub struct SearchResult {
     /// Source language detected from the classfile SourceFile attribute.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_language: Option<SourceLanguage>,
+    /// Configuration scopes that include this symbol's dependency
+    /// (e.g. `["compileClasspath", "runtimeClasspath"]`).
+    pub scopes: Vec<String>,
 }
 
 impl SearchResult {

@@ -31,7 +31,7 @@ fn agentic_search_json_output() {
     let json: serde_json::Value = serde_json::from_slice(&output.stdout)
         .expect("stdout should be valid JSON in agentic mode");
     assert!(!json["results"].as_array().unwrap().is_empty());
-    assert!(json["query"].is_string());
+    assert_eq!(json["query"], "ImmutableList");
     assert!(json["total_matches"].is_u64());
 }
 
@@ -179,11 +179,12 @@ fn agentic_deps_json_output() {
 }
 
 #[test]
-fn agentic_list_json_output() {
+fn agentic_search_dependency_json_output() {
     let project = require_indexed_project!();
     let output = Command::new(env!("CARGO_BIN_EXE_classpath-surfer"))
         .args([
-            "list",
+            "search",
+            "--dependency",
             "com.google.code.gson:gson:*",
             "--agentic",
             "--project-dir",
@@ -200,10 +201,10 @@ fn agentic_list_json_output() {
     );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout)
         .expect("stdout should be valid JSON in agentic mode");
-    assert!(json["gav_pattern"].is_string());
+    assert!(json["dependency"].is_string());
     assert!(!json["matched_gavs"].as_array().unwrap().is_empty());
-    assert!(json["total_symbols"].as_u64().unwrap() > 0);
-    assert!(!json["symbols"].as_array().unwrap().is_empty());
+    assert!(json["total_matches"].as_u64().unwrap() > 0);
+    assert!(!json["results"].as_array().unwrap().is_empty());
 }
 
 #[test]

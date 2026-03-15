@@ -42,10 +42,10 @@ enum Commands {
 
     /// Search for symbols in indexed dependencies
     Search {
-        /// Symbol name or pattern to search
-        query: String,
+        /// Symbol name or pattern to search (optional when --dependency is set)
+        query: Option<String>,
 
-        /// Filter by symbol type [possible values: any, class, method, field]
+        /// Filter by symbol type (comma-separated) [possible values: any, class, method, field]
         #[arg(long, default_value = "any")]
         r#type: String,
 
@@ -65,13 +65,17 @@ enum Commands {
         #[arg(long, default_value = "0")]
         offset: usize,
 
-        /// Restrict search to a specific dependency (GAV pattern)
+        /// Restrict search to dependencies matching a GAV pattern (e.g., "com.google.*:guava:*")
         #[arg(long)]
         dependency: Option<String>,
 
         /// Filter by access level (comma-separated) [possible values: public, protected, private, package_private, all]
         #[arg(long, default_value = "public")]
         access: String,
+
+        /// Filter by configuration scope (e.g., compileClasspath, runtimeClasspath)
+        #[arg(long)]
+        scope: Option<String>,
     },
 
     /// Show source code for a specific symbol
@@ -106,27 +110,9 @@ enum Commands {
         #[arg(long)]
         filter: Option<String>,
 
-        /// Maximum number of results
-        #[arg(long, default_value = "50")]
-        limit: usize,
-
-        /// Number of results to skip (for pagination)
-        #[arg(long, default_value = "0")]
-        offset: usize,
-    },
-
-    /// List all symbols for matching dependencies
-    List {
-        /// GAV pattern (e.g., "com.google.guava:guava:*")
-        gav_pattern: String,
-
-        /// Filter by symbol type (comma-separated) [possible values: any, class, method, field]
-        #[arg(long, default_value = "class,method")]
-        r#type: String,
-
-        /// Filter by access level (comma-separated) [possible values: public, protected, private, package_private, all]
-        #[arg(long, default_value = "public")]
-        access: String,
+        /// Filter by configuration scope (e.g., compileClasspath, runtimeClasspath)
+        #[arg(long)]
+        scope: Option<String>,
 
         /// Maximum number of results
         #[arg(long, default_value = "50")]
@@ -199,19 +185,35 @@ fn main() {
             offset,
             dependency,
             access,
+            scope,
         } => {
+            // Validate: at least one of query or dependency must be provided
+            if query.is_none() && dependency.is_none() {
+                let err: anyhow::Error = CliError::usage(
+                    "MISSING_QUERY",
+                    "Either a search query or --dependency must be provided.",
+                )
+                .into();
+                if output_mode == OutputMode::Agentic {
+                    output::emit_json_error(&err);
+                } else {
+                    eprintln!("Error: {err:#}");
+                    std::process::exit(2);
+                }
+            }
+
             let access_levels: Option<Vec<&str>> = if access == "all" {
                 None
             } else {
                 Some(access.split(',').map(|s| s.trim()).collect())
             };
             let access_refs = access_levels.as_deref();
+            let is_listing = query.is_none();
 
             if output_mode == OutputMode::Tui {
-                // TUI manages its own pagination (infinite scroll)
                 let effective_limit = limit.unwrap_or(50);
                 let sq = SearchQuery {
-                    query: &query,
+                    query: query.as_deref(),
                     symbol_type: &r#type,
                     fqn_mode: fqn,
                     regex_mode: regex,
@@ -219,6 +221,7 @@ fn main() {
                     dependency: dependency.as_deref(),
                     access_levels: access_refs,
                     offset: 0,
+                    scope: scope.as_deref(),
                 };
                 cli::require_index(&project_dir).and_then(|()| {
                     classpath_surfer::tui::search::run_interactive(&project_dir, &sq)
@@ -226,7 +229,7 @@ fn main() {
             } else {
                 let effective_limit = limit.unwrap_or(20);
                 let sq = SearchQuery {
-                    query: &query,
+                    query: query.as_deref(),
                     symbol_type: &r#type,
                     fqn_mode: fqn,
                     regex_mode: regex,
@@ -234,11 +237,17 @@ fn main() {
                     dependency: dependency.as_deref(),
                     access_levels: access_refs,
                     offset,
+                    scope: scope.as_deref(),
+                };
+                let plain_renderer = if is_listing {
+                    cli::render::search_list
+                } else {
+                    cli::render::search
                 };
                 render(
                     output_mode,
                     cli::search::run(&project_dir, &sq),
-                    cli::render::search,
+                    plain_renderer,
                     None::<fn(&_) -> anyhow::Result<()>>,
                 )
             }
@@ -268,42 +277,21 @@ fn main() {
         }
         Commands::Deps {
             filter,
+            scope,
             limit,
             offset,
         } => render(
             output_mode,
-            cli::deps::run(&project_dir, filter.as_deref(), limit, offset),
+            cli::deps::run(
+                &project_dir,
+                filter.as_deref(),
+                scope.as_deref(),
+                limit,
+                offset,
+            ),
             cli::render::deps,
             None::<fn(&_) -> anyhow::Result<()>>,
         ),
-        Commands::List {
-            gav_pattern,
-            r#type,
-            access,
-            limit,
-            offset,
-        } => {
-            let types: Vec<&str> = r#type.split(',').map(|s| s.trim()).collect();
-            let access_levels: Option<Vec<&str>> = if access == "all" {
-                None
-            } else {
-                Some(access.split(',').map(|s| s.trim()).collect())
-            };
-            let access_refs = access_levels.as_deref();
-            render(
-                output_mode,
-                cli::list::run(
-                    &project_dir,
-                    &gav_pattern,
-                    &types,
-                    access_refs,
-                    limit,
-                    offset,
-                ),
-                cli::render::list,
-                None::<fn(&_) -> anyhow::Result<()>>,
-            )
-        }
         Commands::Status => render(
             output_mode,
             cli::status::run(&project_dir),

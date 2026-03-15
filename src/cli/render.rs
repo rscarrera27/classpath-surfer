@@ -4,14 +4,39 @@
 //! was previously inlined in each handler, used when stdout is not a TTY.
 
 use crate::model::{
-    CleanOutput, DepsOutput, InitOutput, ListOutput, RefreshOutput, SearchOutput, ShowOutput,
-    StatusOutput, format_lang_display,
+    CleanOutput, DepsOutput, InitOutput, RefreshOutput, SearchOutput, ShowOutput, StatusOutput,
+    format_lang_display,
 };
+
+/// Render search results as a compact list (used when listing symbols without a query).
+pub fn search_list(output: &SearchOutput) {
+    let pattern = output.dependency.as_deref().unwrap_or("*");
+
+    if output.results.is_empty() {
+        println!("No symbols found for '{pattern}'.");
+        return;
+    }
+
+    if output.has_more {
+        eprintln!(
+            "Showing {} of {} symbols. Use --offset {} to see more.",
+            output.results.len(),
+            output.total_matches,
+            output.offset + output.results.len()
+        );
+    }
+
+    for sym in &output.results {
+        println!("[{}] {}  {}", sym.symbol_kind, sym.fqn, sym.signature.java);
+    }
+}
 
 /// Render search results as a plain-text ASCII table.
 pub fn search(output: &SearchOutput) {
+    let query_display = output.query.as_deref().unwrap_or("*");
+
     if output.results.is_empty() {
-        println!("No results found for '{}'.", output.query);
+        println!("No results found for '{}'.", query_display);
         return;
     }
 
@@ -21,7 +46,7 @@ pub fn search(output: &SearchOutput) {
             "Showing {} of {} matches for '{}'. Use --offset {} to see more.",
             output.results.len(),
             output.total_matches,
-            output.query,
+            query_display,
             output.offset + output.results.len()
         );
     } else if output.total_matches > output.results.len() {
@@ -29,12 +54,13 @@ pub fn search(output: &SearchOutput) {
             "Showing {} of {} matches for '{}'.",
             output.results.len(),
             output.total_matches,
-            output.query
+            query_display
         );
     }
 
     let has_kotlin = output.results.iter().any(|r| r.signature.kotlin.is_some());
     let any_source = output.results.iter().any(|r| r.has_source());
+    let any_scopes = output.results.iter().any(|r| !r.scopes.is_empty());
 
     // Column widths
     let w_fqn = output
@@ -65,6 +91,17 @@ pub fn search(output: &SearchOutput) {
     };
     let w_src = 10; // "Decompiler"
     let w_lang = 7; // "Clojure"
+    let w_scope = if any_scopes {
+        output
+            .results
+            .iter()
+            .map(|r| format_scopes(&r.scopes).len())
+            .max()
+            .unwrap_or(5)
+            .clamp(5, 30)
+    } else {
+        0
+    };
 
     // Header
     print!("{:<w_fqn$}  {:<w_sig$}", "Symbol", "Java Signature");
@@ -75,7 +112,11 @@ pub fn search(output: &SearchOutput) {
     if any_source {
         print!("  {:<w_lang$}", "Lang");
     }
-    println!("  Dependency");
+    print!("  Dependency");
+    if any_scopes {
+        print!("  {:<w_scope$}", "Scope");
+    }
+    println!();
 
     // Separator
     print!("{:-<w_fqn$}  {:-<w_sig$}", "", "");
@@ -86,7 +127,11 @@ pub fn search(output: &SearchOutput) {
     if any_source {
         print!("  {:-<w_lang$}", "");
     }
-    println!("  {:-<20}", "");
+    print!("  {:-<20}", "");
+    if any_scopes {
+        print!("  {:-<w_scope$}", "");
+    }
+    println!();
 
     // Rows
     for r in &output.results {
@@ -119,7 +164,11 @@ pub fn search(output: &SearchOutput) {
             print!("  {:<w_lang$}", lang);
         }
 
-        println!("  {}", r.gav);
+        print!("  {}", r.gav);
+        if any_scopes {
+            print!("  {:<w_scope$}", format_scopes(&r.scopes));
+        }
+        println!();
     }
 }
 
@@ -237,29 +286,28 @@ pub fn deps(output: &DepsOutput) {
     }
 
     for dep in &output.dependencies {
-        println!("{} ({} symbols)", dep.gav, dep.symbol_count);
+        let scope_info = format_scopes(&dep.scopes);
+        if scope_info.is_empty() {
+            println!("{} ({} symbols)", dep.gav, dep.symbol_count);
+        } else {
+            println!(
+                "{} ({} symbols) [{}]",
+                dep.gav, dep.symbol_count, scope_info
+            );
+        }
     }
 }
 
-/// Render symbol list as plain text.
-pub fn list(output: &ListOutput) {
-    if output.symbols.is_empty() {
-        println!("No symbols found for '{}'.", output.gav_pattern);
-        return;
+/// Format configuration scopes for display (e.g. "compile+runtime").
+fn format_scopes(scopes: &[String]) -> String {
+    if scopes.is_empty() {
+        return String::new();
     }
-
-    if output.has_more {
-        eprintln!(
-            "Showing {} of {} symbols. Use --offset {} to see more.",
-            output.symbols.len(),
-            output.total_symbols,
-            output.offset + output.symbols.len()
-        );
-    }
-
-    for sym in &output.symbols {
-        println!("[{}] {}  {}", sym.symbol_kind, sym.fqn, sym.signature.java);
-    }
+    scopes
+        .iter()
+        .map(|s| s.strip_suffix("Classpath").unwrap_or(s))
+        .collect::<Vec<_>>()
+        .join("+")
 }
 
 fn truncate_or_pad(s: &str, max_width: usize) -> String {

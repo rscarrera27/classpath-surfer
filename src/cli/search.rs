@@ -14,11 +14,13 @@ pub fn run(project_dir: &Path, query: &SearchQuery) -> Result<SearchOutput> {
 
     let index_dir = project_dir.join(".classpath-surfer/index");
     let reader = IndexReader::open(&index_dir)?;
-    let (results, total_matches) = reader.search(query)?;
+    let (results, total_matches, matched_gavs) = reader.search(query)?;
 
     let has_more = query.offset + results.len() < total_matches;
     Ok(SearchOutput {
-        query: query.query.to_string(),
+        query: query.query.map(|s| s.to_string()),
+        dependency: query.dependency.map(|s| s.to_string()),
+        matched_gavs,
         total_matches,
         offset: query.offset,
         limit: query.limit,

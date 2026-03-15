@@ -11,11 +11,17 @@ use super::{SearchResult, SourceOrigin};
 ///
 /// Bundles all search options into a single struct to avoid long argument
 /// lists in [`crate::cli::search::run`] and [`crate::index::reader::IndexReader::search`].
+///
+/// Either `query` or `dependency` (or both) must be provided.  When `query`
+/// is `None` and `dependency` is set, all symbols for the matching
+/// dependencies are returned (sorted by kind then FQN).
 #[derive(Debug)]
 pub struct SearchQuery<'a> {
-    /// Symbol name, FQN, or regex pattern.
-    pub query: &'a str,
-    /// Filter by symbol type (`"any"`, `"class"`, `"method"`, `"field"`).
+    /// Symbol name, FQN, or regex pattern.  `None` to list all symbols
+    /// (requires `dependency` to be set).
+    pub query: Option<&'a str>,
+    /// Filter by symbol type — `"any"`, or comma-separated kinds
+    /// (`"class"`, `"method"`, `"field"`, e.g. `"class,method"`).
     pub symbol_type: &'a str,
     /// Exact FQN match mode.
     pub fqn_mode: bool,
@@ -25,17 +31,26 @@ pub struct SearchQuery<'a> {
     pub limit: usize,
     /// Number of results to skip (for pagination).
     pub offset: usize,
-    /// Restrict to a specific dependency GAV.
+    /// Restrict to dependencies matching a GAV pattern (glob, e.g. `"com.google.*:guava:*"`).
     pub dependency: Option<&'a str>,
     /// Filter by visibility levels (`None` = all).
     pub access_levels: Option<&'a [&'a str]>,
+    /// Filter results to a specific configuration scope (e.g. `"compileClasspath"`).
+    pub scope: Option<&'a str>,
 }
 
 /// Structured output for the `search` command.
 #[derive(Debug, Serialize)]
 pub struct SearchOutput {
-    /// The original query string.
-    pub query: String,
+    /// The original query string (`None` when listing all symbols for a dependency).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query: Option<String>,
+    /// GAV pattern used to filter dependencies (`None` when searching all dependencies).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dependency: Option<String>,
+    /// GAVs that matched the dependency pattern (`None` when no pattern was used).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_gavs: Option<Vec<String>>,
     /// Total number of matching documents (may exceed `results.len()` due to limit).
     pub total_matches: usize,
     /// Offset used for this page of results.
@@ -172,23 +187,6 @@ pub struct DepInfo {
     pub gav: String,
     /// Number of indexed symbols in this dependency.
     pub symbol_count: usize,
-}
-
-/// Structured output for the `list` command.
-#[derive(Debug, Serialize)]
-pub struct ListOutput {
-    /// GAV pattern used to match dependencies.
-    pub gav_pattern: String,
-    /// GAVs that matched the pattern.
-    pub matched_gavs: Vec<String>,
-    /// Total number of symbols across all matched dependencies.
-    pub total_symbols: usize,
-    /// Offset used for this page of results.
-    pub offset: usize,
-    /// Limit used for this page of results.
-    pub limit: usize,
-    /// Whether more results are available beyond this page.
-    pub has_more: bool,
-    /// Symbols from the matched dependencies.
-    pub symbols: Vec<SearchResult>,
+    /// Configuration scopes that include this dependency.
+    pub scopes: Vec<String>,
 }

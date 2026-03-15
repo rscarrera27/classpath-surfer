@@ -76,6 +76,7 @@ pub fn run_with_java_home(
     let force_full = force || open_result.schema_rebuilt;
 
     let unique_deps = merge::deduplicate(&current_manifest);
+    let scope_map = current_manifest.scopes_by_gav();
 
     let output = if force_full || !indexed_manifest_path.exists() {
         // Full index: index everything
@@ -93,7 +94,11 @@ pub fn run_with_java_home(
                 eprintln!("  warning: JAR not found: {}", dep.jar_path.display());
                 continue;
             }
-            match writer::index_dependency(&index_writer, &fields, dep) {
+            let scopes_str = scope_map
+                .get(&dep.gav())
+                .map(|s| s.iter().cloned().collect::<Vec<_>>().join(","))
+                .unwrap_or_default();
+            match writer::index_dependency(&index_writer, &fields, dep, &scopes_str) {
                 Ok(count) => {
                     total_symbols += count;
                     eprintln!("  indexed {} ({} symbols)", dep.gav(), count);
@@ -157,7 +162,11 @@ pub fn run_with_java_home(
                 eprintln!("  warning: JAR not found: {}", dep.jar_path.display());
                 continue;
             }
-            match writer::index_dependency(&index_writer, &fields, dep) {
+            let scopes_str = scope_map
+                .get(&dep.gav())
+                .map(|s| s.iter().cloned().collect::<Vec<_>>().join(","))
+                .unwrap_or_default();
+            match writer::index_dependency(&index_writer, &fields, dep, &scopes_str) {
                 Ok(count) => {
                     total_symbols += count;
                     eprintln!("  indexed {} ({} symbols)", dep.gav(), count);

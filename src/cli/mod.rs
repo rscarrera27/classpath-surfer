@@ -1,7 +1,7 @@
 //! CLI subcommand dispatch.
 //!
-//! Each subcommand (`init`, `refresh`, `search`, `show`, `status`, `clean`) lives
-//! in its own module and is wired into the top-level clap `Commands` enum.
+//! Each subcommand (`init`, `refresh`, `search`, `show`, `deps`, `status`, `clean`)
+//! lives in its own module and is wired into the top-level clap `Commands` enum.
 //! The `render` module provides plain-text renderers for non-TTY output.
 
 use std::path::Path;
@@ -13,8 +13,6 @@ use crate::staleness;
 
 /// List indexed dependencies with symbol counts.
 pub mod deps;
-/// List all symbols for matching dependencies.
-pub mod list;
 
 /// Remove index data and staleness markers.
 pub mod clean;
@@ -80,19 +78,7 @@ fn check_staleness(project_dir: &Path) -> Result<()> {
 
 /// Test whether a GAV string matches a glob-like pattern.
 ///
-/// `*` is treated as a wildcard matching any sequence of characters;
-/// all other characters are matched literally (case-sensitive).
-///
-/// # Examples
-///
-/// ```ignore
-/// matches_gav_pattern("com.google.guava:guava:33.0-jre", "com.google.*:*")  // true
-/// matches_gav_pattern("io.netty:netty-all:4.1", "*:netty-*:*")             // true
-/// ```
+/// Delegates to [`crate::model::matches_gav_pattern`].
 pub fn matches_gav_pattern(gav: &str, pattern: &str) -> bool {
-    let escaped = regex::escape(pattern);
-    let regex_str = format!("^{}$", escaped.replace(r"\*", ".*"));
-    regex::Regex::new(&regex_str)
-        .map(|re| re.is_match(gav))
-        .unwrap_or(false)
+    crate::model::matches_gav_pattern(gav, pattern)
 }

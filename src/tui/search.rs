@@ -42,7 +42,7 @@ impl SearchState {
             ..*query_template
         };
         paged_query.limit = self.page_size;
-        let (more_results, total) = reader.search(&paged_query)?;
+        let (more_results, total, _) = reader.search(&paged_query)?;
         self.total_matches = total;
         self.has_more = self.results.len() + more_results.len() < total;
         self.results.extend(more_results);
@@ -59,16 +59,16 @@ pub fn run_interactive(project_dir: &Path, query: &SearchQuery) -> Result<()> {
     let reader = IndexReader::open(&index_dir)?;
 
     // Initial fetch
-    let (initial_results, total_matches) = reader.search(query)?;
+    let (initial_results, total_matches, _) = reader.search(query)?;
 
     if initial_results.is_empty() {
-        eprintln!("No results found for '{}'.", query.query);
+        eprintln!("No results found for '{}'.", query.query.unwrap_or("*"));
         return Ok(());
     }
 
     let has_more = initial_results.len() < total_matches;
     let mut state = SearchState {
-        query: query.query.to_string(),
+        query: query.query.unwrap_or("*").to_string(),
         results: initial_results,
         total_matches,
         has_more,
@@ -347,13 +347,14 @@ fn render_search_table(
     compact: bool,
 ) {
     // Adaptive detail height: 5 (compact), 6 (full), 7 (full + kotlin sigs)
+    // +1 for scope line (almost always present)
     let has_kotlin = state.results.iter().any(|r| r.signature.kotlin.is_some());
     let detail_height: u16 = if compact {
-        4
-    } else if has_kotlin {
-        6
-    } else {
         5
+    } else if has_kotlin {
+        7
+    } else {
+        6
     };
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -485,6 +486,20 @@ fn render_detail_panel(frame: &mut Frame, area: Rect, result: &SearchResult, com
         Span::styled("Dep: ", label_style),
         Span::raw(result.gav.clone()),
     ]));
+
+    // Scope
+    if !result.scopes.is_empty() {
+        let scope_display = result
+            .scopes
+            .iter()
+            .map(|s| s.strip_suffix("Classpath").unwrap_or(s))
+            .collect::<Vec<_>>()
+            .join(", ");
+        lines.push(Line::from(vec![
+            Span::styled("Scope: ", label_style),
+            Span::raw(scope_display),
+        ]));
+    }
 
     // Source/Language badge in top-right corner
     let badge = if result.has_source() {

@@ -8,7 +8,9 @@ use tantivy::schema::*;
 use tantivy::{Index, ReloadPolicy};
 
 use crate::error::CliError;
-use crate::model::{SearchQuery, SearchResult, SignatureDisplay, SourceLanguage, SymbolKind};
+use crate::model::{
+    SearchQuery, SearchResult, SignatureDisplay, SourceLanguage, SymbolKind, matches_gav_pattern,
+};
 
 /// Read-only handle to the Tantivy symbol index.
 pub struct IndexReader {
@@ -40,6 +42,7 @@ impl IndexReader {
             "access_level",
             "source",
             "source_language",
+            "scopes",
         ];
         let missing: Vec<&str> = required_fields
             .iter()
@@ -68,7 +71,7 @@ impl IndexReader {
 
     /// Search the symbol index and return ranked results.
     ///
-    /// Supports three search modes (selected by the boolean flags in [`SearchQuery`]):
+    /// When `query` is `Some`, supports three search modes:
     ///
     /// - **Smart search** (default) -- auto-detects FQN queries (2+ dots) for exact
     ///   match, otherwise token search on `simple_name` and `name_parts` with AND
@@ -77,72 +80,127 @@ impl IndexReader {
     /// - **Regex mode** (`regex_mode = true`) -- regex pattern matched against
     ///   `simple_name`.
     ///
-    /// Results can be narrowed by `symbol_type` (`"class"`, `"method"`, `"field"`,
-    /// or `"any"`), by an optional `dependency` GAV filter, and by access level
-    /// (e.g. `&["public", "protected"]`).  Pass `None` for `access_levels` to
-    /// include all visibility levels.
-    pub fn search(&self, sq: &SearchQuery) -> Result<(Vec<SearchResult>, usize)> {
+    /// When `query` is `None`, all symbols are returned (requires `dependency`).
+    /// Results without a text query are sorted by kind then FQN.
+    ///
+    /// Results can be narrowed by `symbol_type` (comma-separated kinds like
+    /// `"class,method"`, or `"any"` for all), by a `dependency` GAV pattern
+    /// (glob with `*` wildcards), and by access level.
+    ///
+    /// Returns `(results, total_count, matched_gavs)` where `matched_gavs` is
+    /// `Some` when a `dependency` pattern was provided.
+    pub fn search(
+        &self,
+        sq: &SearchQuery,
+    ) -> Result<(Vec<SearchResult>, usize, Option<Vec<String>>)> {
         let schema = self.index.schema();
         let searcher = self.reader.searcher();
+        let is_listing = sq.query.is_none();
 
-        let query: Box<dyn tantivy::query::Query> = if sq.fqn_mode {
-            // Exact FQN match
-            let fqn_field = schema.get_field("fqn").unwrap();
-            Box::new(TermQuery::new(
-                tantivy::Term::from_field_text(fqn_field, sq.query),
-                IndexRecordOption::Basic,
-            ))
-        } else if sq.regex_mode {
-            // Regex search on simple_name
-            let simple_name_field = schema.get_field("simple_name").unwrap();
-            Box::new(RegexQuery::from_pattern(sq.query, simple_name_field)?)
-        } else {
-            // Smart search: auto-detect FQN or token search
-            let query_str = sq.query;
-
-            if query_str.chars().filter(|&c| c == '.').count() >= 2 {
-                // Auto FQN: query looks like a fully qualified name
+        // Build base query
+        let base_query: Box<dyn tantivy::query::Query> = if let Some(query_str) = sq.query {
+            if sq.fqn_mode {
+                let fqn_field = schema.get_field("fqn").unwrap();
+                Box::new(TermQuery::new(
+                    tantivy::Term::from_field_text(fqn_field, query_str),
+                    IndexRecordOption::Basic,
+                ))
+            } else if sq.regex_mode {
+                let simple_name_field = schema.get_field("simple_name").unwrap();
+                Box::new(RegexQuery::from_pattern(query_str, simple_name_field)?)
+            } else if query_str.chars().filter(|&c| c == '.').count() >= 2 {
                 let fqn_field = schema.get_field("fqn").unwrap();
                 Box::new(TermQuery::new(
                     tantivy::Term::from_field_text(fqn_field, query_str),
                     IndexRecordOption::Basic,
                 ))
             } else {
-                // Token search on simple_name + name_parts (AND semantics)
                 let simple_name = schema.get_field("simple_name").unwrap();
                 let name_parts = schema.get_field("name_parts").unwrap();
                 let mut parser = QueryParser::for_index(&self.index, vec![simple_name, name_parts]);
                 parser.set_conjunction_by_default();
                 parser.parse_query(query_str)?
             }
+        } else {
+            Box::new(AllQuery)
         };
 
-        // Apply filters
         let mut clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = vec![];
-        clauses.push((Occur::Must, query));
+        clauses.push((Occur::Must, base_query));
 
+        // Symbol type filter — supports comma-separated kinds
         if sq.symbol_type != "any" {
             let kind_field = schema.get_field("symbol_kind").unwrap();
-            clauses.push((
-                Occur::Must,
-                Box::new(TermQuery::new(
-                    tantivy::Term::from_field_text(kind_field, sq.symbol_type),
-                    IndexRecordOption::Basic,
-                )),
-            ));
+            let types: Vec<&str> = sq.symbol_type.split(',').map(|s| s.trim()).collect();
+            if types.len() == 1 {
+                clauses.push((
+                    Occur::Must,
+                    Box::new(TermQuery::new(
+                        tantivy::Term::from_field_text(kind_field, types[0]),
+                        IndexRecordOption::Basic,
+                    )),
+                ));
+            } else {
+                let type_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = types
+                    .iter()
+                    .map(|&t| {
+                        (
+                            Occur::Should,
+                            Box::new(TermQuery::new(
+                                tantivy::Term::from_field_text(kind_field, t),
+                                IndexRecordOption::Basic,
+                            )) as Box<dyn tantivy::query::Query>,
+                        )
+                    })
+                    .collect();
+                clauses.push((Occur::Must, Box::new(BooleanQuery::new(type_clauses))));
+            }
         }
 
-        if let Some(dep) = sq.dependency {
+        // Dependency GAV filter — supports glob patterns with `*`
+        let matched_gavs = if let Some(dep) = sq.dependency {
             let gav_field = schema.get_field("gav").unwrap();
-            clauses.push((
-                Occur::Must,
-                Box::new(TermQuery::new(
-                    tantivy::Term::from_field_text(gav_field, dep),
-                    IndexRecordOption::Basic,
-                )),
-            ));
-        }
+            if dep.contains('*') {
+                // Pattern matching — resolve to list of matching GAVs
+                let all_gavs = self.list_gavs()?;
+                let matching: Vec<String> = all_gavs
+                    .iter()
+                    .filter(|(g, _)| matches_gav_pattern(g, dep))
+                    .map(|(g, _)| g.clone())
+                    .collect();
+                if matching.is_empty() {
+                    return Ok((vec![], 0, Some(vec![])));
+                }
+                let gav_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = matching
+                    .iter()
+                    .map(|g| {
+                        (
+                            Occur::Should,
+                            Box::new(TermQuery::new(
+                                tantivy::Term::from_field_text(gav_field, g),
+                                IndexRecordOption::Basic,
+                            )) as Box<dyn tantivy::query::Query>,
+                        )
+                    })
+                    .collect();
+                clauses.push((Occur::Must, Box::new(BooleanQuery::new(gav_clauses))));
+                Some(matching)
+            } else {
+                // Exact GAV match (optimized single TermQuery)
+                clauses.push((
+                    Occur::Must,
+                    Box::new(TermQuery::new(
+                        tantivy::Term::from_field_text(gav_field, dep),
+                        IndexRecordOption::Basic,
+                    )),
+                ));
+                Some(vec![dep.to_string()])
+            }
+        } else {
+            None
+        };
 
+        // Access level filter
         if let Some(levels) = sq.access_levels {
             let al_field = schema.get_field("access_level").unwrap();
             let level_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = levels
@@ -161,18 +219,79 @@ impl IndexReader {
         }
 
         let combined = BooleanQuery::new(clauses);
-        let (top_docs, total_count) = searcher.search(
-            &combined,
-            &(TopDocs::with_limit(sq.limit).and_offset(sq.offset), Count),
-        )?;
 
-        let mut results = Vec::new();
-        for (_score, doc_address) in top_docs {
-            let doc: tantivy::TantivyDocument = searcher.doc(doc_address)?;
-            results.push(doc_to_search_result(&schema, &doc));
+        let (mut results, total_count) = if is_listing {
+            // Listing mode: fetch offset+limit docs, sort by kind then FQN, then slice
+            let pre_filter_count = searcher.search(&combined, &Count)?;
+            let fetch_count = if sq.scope.is_some() {
+                pre_filter_count
+            } else {
+                sq.offset.saturating_add(sq.limit)
+            };
+            let (top_docs, _) =
+                searcher.search(&combined, &(TopDocs::with_limit(fetch_count), Count))?;
+
+            let mut all_results: Vec<SearchResult> = top_docs
+                .into_iter()
+                .map(|(_score, addr)| {
+                    let doc: tantivy::TantivyDocument = searcher.doc(addr).unwrap();
+                    doc_to_search_result(&schema, &doc)
+                })
+                .collect();
+
+            all_results.sort_by(|a, b| {
+                let kind_order = |k: &SymbolKind| -> u8 {
+                    match k {
+                        SymbolKind::Class => 0,
+                        SymbolKind::Method => 1,
+                        SymbolKind::Field => 2,
+                    }
+                };
+                kind_order(&a.symbol_kind)
+                    .cmp(&kind_order(&b.symbol_kind))
+                    .then_with(|| a.fqn.cmp(&b.fqn))
+            });
+
+            // Apply scope filter before pagination in listing mode
+            if let Some(scope_filter) = sq.scope {
+                all_results.retain(|r| r.scopes.iter().any(|s| s == scope_filter));
+                let total = all_results.len();
+                let sliced: Vec<SearchResult> = all_results
+                    .into_iter()
+                    .skip(sq.offset)
+                    .take(sq.limit)
+                    .collect();
+                return Ok((sliced, total, matched_gavs));
+            }
+
+            let sliced: Vec<SearchResult> = all_results
+                .into_iter()
+                .skip(sq.offset)
+                .take(sq.limit)
+                .collect();
+            (sliced, pre_filter_count)
+        } else {
+            // Search mode: let Tantivy handle offset/limit with relevance ranking
+            let (top_docs, total_count) = searcher.search(
+                &combined,
+                &(TopDocs::with_limit(sq.limit).and_offset(sq.offset), Count),
+            )?;
+            let results: Vec<SearchResult> = top_docs
+                .into_iter()
+                .map(|(_score, addr)| {
+                    let doc: tantivy::TantivyDocument = searcher.doc(addr).unwrap();
+                    doc_to_search_result(&schema, &doc)
+                })
+                .collect();
+            (results, total_count)
+        };
+
+        // Scope filter (post-query refinement, search mode only)
+        if let Some(scope_filter) = sq.scope {
+            results.retain(|r| r.scopes.iter().any(|s| s == scope_filter));
         }
 
-        Ok((results, total_count))
+        Ok((results, total_count, matched_gavs))
     }
 
     /// Return the total number of indexed symbol documents.
@@ -215,113 +334,6 @@ impl IndexReader {
 
         Ok(results)
     }
-
-    /// List symbols from the given GAVs, with optional type and access filters.
-    ///
-    /// Returns `(symbols, total_count)` where `total_count` is the number of
-    /// matching documents before offset/limit slicing.
-    pub fn list_symbols(
-        &self,
-        gavs: &[String],
-        symbol_types: &[&str],
-        access_levels: Option<&[&str]>,
-        limit: usize,
-        offset: usize,
-    ) -> Result<(Vec<SearchResult>, usize)> {
-        let schema = self.index.schema();
-        let searcher = self.reader.searcher();
-        let gav_field = schema.get_field("gav").unwrap();
-
-        // GAV filter (OR of all matching GAVs)
-        let gav_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = gavs
-            .iter()
-            .map(|g| {
-                (
-                    Occur::Should,
-                    Box::new(TermQuery::new(
-                        tantivy::Term::from_field_text(gav_field, g),
-                        IndexRecordOption::Basic,
-                    )) as Box<dyn tantivy::query::Query>,
-                )
-            })
-            .collect();
-
-        let mut clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = vec![];
-        clauses.push((Occur::Must, Box::new(BooleanQuery::new(gav_clauses))));
-
-        // Symbol type filter
-        if !symbol_types.contains(&"any") {
-            let kind_field = schema.get_field("symbol_kind").unwrap();
-            let type_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = symbol_types
-                .iter()
-                .map(|&t| {
-                    (
-                        Occur::Should,
-                        Box::new(TermQuery::new(
-                            tantivy::Term::from_field_text(kind_field, t),
-                            IndexRecordOption::Basic,
-                        )) as Box<dyn tantivy::query::Query>,
-                    )
-                })
-                .collect();
-            clauses.push((Occur::Must, Box::new(BooleanQuery::new(type_clauses))));
-        }
-
-        // Access level filter
-        if let Some(levels) = access_levels {
-            let al_field = schema.get_field("access_level").unwrap();
-            let level_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = levels
-                .iter()
-                .map(|&level| {
-                    (
-                        Occur::Should,
-                        Box::new(TermQuery::new(
-                            tantivy::Term::from_field_text(al_field, level),
-                            IndexRecordOption::Basic,
-                        )) as Box<dyn tantivy::query::Query>,
-                    )
-                })
-                .collect();
-            clauses.push((Occur::Must, Box::new(BooleanQuery::new(level_clauses))));
-        }
-
-        let combined = BooleanQuery::new(clauses);
-
-        // Collect all matching docs, then sort in-memory by kind then FQN
-        let total_count = searcher.search(&combined, &Count)?;
-
-        // Fetch offset + limit docs (we need enough to slice)
-        let fetch_count = offset.saturating_add(limit);
-        let (top_docs, _) =
-            searcher.search(&combined, &(TopDocs::with_limit(fetch_count), Count))?;
-
-        // Convert to SearchResult and sort
-        let mut all_results: Vec<SearchResult> = top_docs
-            .into_iter()
-            .map(|(_score, addr)| {
-                let doc: tantivy::TantivyDocument = searcher.doc(addr).unwrap();
-                doc_to_search_result(&schema, &doc)
-            })
-            .collect();
-
-        all_results.sort_by(|a, b| {
-            let kind_order = |k: &SymbolKind| -> u8 {
-                match k {
-                    SymbolKind::Class => 0,
-                    SymbolKind::Method => 1,
-                    SymbolKind::Field => 2,
-                }
-            };
-            kind_order(&a.symbol_kind)
-                .cmp(&kind_order(&b.symbol_kind))
-                .then_with(|| a.fqn.cmp(&b.fqn))
-        });
-
-        // Apply offset/limit
-        let sliced: Vec<SearchResult> = all_results.into_iter().skip(offset).take(limit).collect();
-
-        Ok((sliced, total_count))
-    }
 }
 
 fn doc_to_search_result(schema: &Schema, doc: &tantivy::TantivyDocument) -> SearchResult {
@@ -362,6 +374,13 @@ fn doc_to_search_result(schema: &Schema, doc: &tantivy::TantivyDocument) -> Sear
         Some(kt_sig)
     };
 
+    let scopes_str = get_text("scopes");
+    let scopes: Vec<String> = if scopes_str.is_empty() {
+        vec![]
+    } else {
+        scopes_str.split(',').map(|s| s.to_string()).collect()
+    };
+
     SearchResult {
         gav: get_text("gav"),
         symbol_kind,
@@ -374,5 +393,6 @@ fn doc_to_search_result(schema: &Schema, doc: &tantivy::TantivyDocument) -> Sear
         access_flags: get_text("access_flags"),
         source,
         source_language,
+        scopes,
     }
 }

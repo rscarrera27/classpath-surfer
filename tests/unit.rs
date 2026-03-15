@@ -259,7 +259,7 @@ fn search_without_index() {
     let result = cli::search::run(
         &project_dir,
         &SearchQuery {
-            query: "Foo",
+            query: Some("Foo"),
             symbol_type: "any",
             fqn_mode: false,
             regex_mode: false,
@@ -267,6 +267,7 @@ fn search_without_index() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         },
     );
     assert!(result.is_err(), "search without index should fail");
@@ -299,7 +300,7 @@ fn agentic_error_output() {
     let result = cli::search::run(
         &project_dir,
         &SearchQuery {
-            query: "Foo",
+            query: Some("Foo"),
             symbol_type: "any",
             fqn_mode: false,
             regex_mode: false,
@@ -307,6 +308,7 @@ fn agentic_error_output() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         },
     );
     let err = result.unwrap_err();
@@ -334,7 +336,7 @@ fn agentic_exit_codes() {
     let result = cli::search::run(
         &project_dir,
         &SearchQuery {
-            query: "Foo",
+            query: Some("Foo"),
             symbol_type: "any",
             fqn_mode: false,
             regex_mode: false,
@@ -342,6 +344,7 @@ fn agentic_exit_codes() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         },
     );
     let err = result.unwrap_err();
@@ -351,4 +354,114 @@ fn agentic_exit_codes() {
         "INDEX_NOT_FOUND should have exit code 3"
     );
     assert_eq!(cli_err.error_code, "INDEX_NOT_FOUND");
+}
+
+// ---------------------------------------------------------------------------
+// Scope feature tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn manifest_scopes_by_gav() {
+    use classpath_surfer::manifest::{
+        ClasspathManifest, ConfigurationManifest, DependencyInfo, ModuleManifest,
+    };
+    use std::collections::BTreeSet;
+
+    let make_dep = |group: &str, artifact: &str, version: &str, scope: &str| DependencyInfo {
+        group: group.to_string(),
+        artifact: artifact.to_string(),
+        version: version.to_string(),
+        jar_path: PathBuf::from("/fake.jar"),
+        source_jar_path: None,
+        scope: scope.to_string(),
+    };
+
+    let manifest = ClasspathManifest {
+        gradle_version: "8.14".to_string(),
+        extraction_timestamp: "2024-01-01".to_string(),
+        modules: vec![ModuleManifest {
+            module_path: ":app".to_string(),
+            configurations: vec![
+                ConfigurationManifest {
+                    name: "compileClasspath".to_string(),
+                    dependencies: vec![
+                        make_dep(
+                            "com.google.guava",
+                            "guava",
+                            "33.4.0-jre",
+                            "compileClasspath",
+                        ),
+                        make_dep("com.google.code.gson", "gson", "2.11.0", "compileClasspath"),
+                    ],
+                },
+                ConfigurationManifest {
+                    name: "runtimeClasspath".to_string(),
+                    dependencies: vec![
+                        make_dep(
+                            "com.google.guava",
+                            "guava",
+                            "33.4.0-jre",
+                            "runtimeClasspath",
+                        ),
+                        make_dep("org.slf4j", "slf4j-api", "2.0.0", "runtimeClasspath"),
+                    ],
+                },
+            ],
+        }],
+    };
+
+    let scope_map = manifest.scopes_by_gav();
+
+    // guava appears in both
+    let guava_scopes = scope_map.get("com.google.guava:guava:33.4.0-jre").unwrap();
+    assert_eq!(
+        *guava_scopes,
+        BTreeSet::from([
+            "compileClasspath".to_string(),
+            "runtimeClasspath".to_string()
+        ])
+    );
+
+    // gson is compile-only
+    let gson_scopes = scope_map.get("com.google.code.gson:gson:2.11.0").unwrap();
+    assert_eq!(
+        *gson_scopes,
+        BTreeSet::from(["compileClasspath".to_string()])
+    );
+
+    // slf4j is runtime-only
+    let slf4j_scopes = scope_map.get("org.slf4j:slf4j-api:2.0.0").unwrap();
+    assert_eq!(
+        *slf4j_scopes,
+        BTreeSet::from(["runtimeClasspath".to_string()])
+    );
+}
+
+#[test]
+fn search_result_scopes_serialization() {
+    use classpath_surfer::model::{SearchResult, SignatureDisplay, SymbolKind};
+
+    let result = SearchResult {
+        gav: "com.google.guava:guava:33.4.0-jre".to_string(),
+        symbol_kind: SymbolKind::Class,
+        fqn: "com.google.common.collect.ImmutableList".to_string(),
+        simple_name: "ImmutableList".to_string(),
+        signature: SignatureDisplay {
+            java: "public abstract class ImmutableList<E>".to_string(),
+            kotlin: None,
+        },
+        access_flags: "public abstract".to_string(),
+        source: "source_jar".to_string(),
+        source_language: None,
+        scopes: vec![
+            "compileClasspath".to_string(),
+            "runtimeClasspath".to_string(),
+        ],
+    };
+
+    let json = serde_json::to_value(&result).unwrap();
+    let scopes = json["scopes"].as_array().unwrap();
+    assert_eq!(scopes.len(), 2);
+    assert_eq!(scopes[0], "compileClasspath");
+    assert_eq!(scopes[1], "runtimeClasspath");
 }

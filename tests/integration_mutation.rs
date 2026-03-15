@@ -24,9 +24,9 @@ fn incremental_indexing() {
     assert!(initial_count > 0);
 
     // Verify Gson is found
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Gson",
+            query: Some("Gson"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -34,6 +34,7 @@ fn incremental_indexing() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     assert!(!results.is_empty(), "Gson should be found before removal");
@@ -57,9 +58,9 @@ fn incremental_indexing() {
     // 4. Verify Gson is gone, ImmutableList still present
     let reader = IndexReader::open(&index_dir).unwrap();
 
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Gson",
+            query: Some("Gson"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -67,6 +68,7 @@ fn incremental_indexing() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     assert!(
@@ -74,9 +76,9 @@ fn incremental_indexing() {
         "Gson should NOT be found after removing dependency"
     );
 
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "ImmutableList",
+            query: Some("ImmutableList"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -84,6 +86,7 @@ fn incremental_indexing() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     assert!(

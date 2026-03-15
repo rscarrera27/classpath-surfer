@@ -70,6 +70,27 @@ impl DependencyInfo {
 }
 
 impl ClasspathManifest {
+    /// Build a mapping from GAV string to the set of configuration names that include it.
+    ///
+    /// Unlike [`all_dependencies()`](Self::all_dependencies) which deduplicates by GAV,
+    /// this method preserves every configuration a GAV appears in.
+    pub fn scopes_by_gav(
+        &self,
+    ) -> std::collections::HashMap<String, std::collections::BTreeSet<String>> {
+        let mut map: std::collections::HashMap<String, std::collections::BTreeSet<String>> =
+            std::collections::HashMap::new();
+        for module in &self.modules {
+            for config in &module.configurations {
+                for dep in &config.dependencies {
+                    map.entry(dep.gav())
+                        .or_default()
+                        .insert(config.name.clone());
+                }
+            }
+        }
+        map
+    }
+
     /// Collect all unique dependencies across all modules/configurations.
     pub fn all_dependencies(&self) -> Vec<&DependencyInfo> {
         use std::collections::HashSet;

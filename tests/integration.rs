@@ -16,9 +16,9 @@ fn kotlin_metadata_extraction() {
     let reader = IndexReader::open(&project.index_dir()).expect("index should be readable");
 
     // CoroutineScope: should be an interface
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "CoroutineScope",
+            query: Some("CoroutineScope"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -26,6 +26,7 @@ fn kotlin_metadata_extraction() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .expect("search should succeed");
     assert!(
@@ -45,9 +46,9 @@ fn kotlin_metadata_extraction() {
     );
 
     // Deferred: interface with type parameter
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Deferred",
+            query: Some("Deferred"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -55,6 +56,7 @@ fn kotlin_metadata_extraction() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .expect("search should succeed");
     let deferred = results
@@ -66,9 +68,9 @@ fn kotlin_metadata_extraction() {
     );
 
     // Job: interface
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Job",
+            query: Some("Job"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -76,6 +78,7 @@ fn kotlin_metadata_extraction() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .expect("search should succeed");
     let job = results.iter().find(|r| {
@@ -94,9 +97,9 @@ fn kotlin_jvm_symbols() {
     let reader = IndexReader::open(&project.index_dir()).unwrap();
 
     // kotlinx-serialization: Json class
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Json",
+            query: Some("Json"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -104,6 +107,7 @@ fn kotlin_jvm_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let json_class = results
@@ -123,9 +127,9 @@ fn kotlin_jvm_symbols() {
     );
 
     // kotlinx-serialization: Serializable annotation (transitive from core)
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Serializable",
+            query: Some("Serializable"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -133,6 +137,7 @@ fn kotlin_jvm_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let serializable = results
@@ -144,9 +149,9 @@ fn kotlin_jvm_symbols() {
     );
 
     // Ktor: HttpClient class
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "HttpClient",
+            query: Some("HttpClient"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -154,6 +159,7 @@ fn kotlin_jvm_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let ktor = results.iter().find(|r| r.fqn.contains("io.ktor.client"));
@@ -166,9 +172,9 @@ fn kmp_jvm_symbols() {
     let reader = IndexReader::open(&project.index_dir()).unwrap();
 
     // kotlinx-datetime
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Instant",
+            query: Some("Instant"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -176,6 +182,7 @@ fn kmp_jvm_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let instant = results.iter().find(|r| r.fqn.contains("kotlinx.datetime"));
@@ -184,9 +191,9 @@ fn kmp_jvm_symbols() {
         "kotlinx.datetime.Instant should be found"
     );
 
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Clock",
+            query: Some("Clock"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -194,15 +201,16 @@ fn kmp_jvm_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let clock = results.iter().find(|r| r.fqn.contains("kotlinx.datetime"));
     assert!(clock.is_some(), "kotlinx.datetime.Clock should be found");
 
     // kotlinx-io
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Buffer",
+            query: Some("Buffer"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -210,14 +218,15 @@ fn kmp_jvm_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let buffer = results.iter().find(|r| r.fqn.contains("kotlinx.io"));
     assert!(buffer.is_some(), "kotlinx.io.Buffer should be found");
 
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Source",
+            query: Some("Source"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -225,6 +234,7 @@ fn kmp_jvm_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let source = results.iter().find(|r| r.fqn.contains("kotlinx.io"));
@@ -236,9 +246,9 @@ fn annotation_processor_symbols() {
     let project = require_indexed_project!();
     let reader = IndexReader::open(&project.index_dir()).unwrap();
 
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Component",
+            query: Some("Component"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -246,14 +256,15 @@ fn annotation_processor_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let dagger = results.iter().find(|r| r.fqn == "dagger.Component");
     assert!(dagger.is_some(), "dagger.Component should be found");
 
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Module",
+            query: Some("Module"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -261,14 +272,15 @@ fn annotation_processor_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let module = results.iter().find(|r| r.fqn == "dagger.Module");
     assert!(module.is_some(), "dagger.Module should be found");
 
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Provides",
+            query: Some("Provides"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -276,6 +288,7 @@ fn annotation_processor_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let provides = results.iter().find(|r| r.fqn == "dagger.Provides");
@@ -288,9 +301,9 @@ fn large_library_symbols() {
     let reader = IndexReader::open(&project.index_dir()).unwrap();
 
     // Spring Core
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Environment",
+            query: Some("Environment"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -298,6 +311,7 @@ fn large_library_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let spring = results.iter().find(|r| r.fqn.contains("springframework"));
@@ -307,9 +321,9 @@ fn large_library_symbols() {
     );
 
     // OkHttp
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "OkHttpClient",
+            query: Some("OkHttpClient"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -317,6 +331,7 @@ fn large_library_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let okhttp = results.iter().find(|r| r.fqn.contains("okhttp3"));
@@ -335,9 +350,9 @@ fn interface_only_symbols() {
     let reader = IndexReader::open(&project.index_dir()).unwrap();
 
     // SLF4J
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Logger",
+            query: Some("Logger"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -345,14 +360,15 @@ fn interface_only_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let slf4j = results.iter().find(|r| r.fqn == "org.slf4j.Logger");
     assert!(slf4j.is_some(), "org.slf4j.Logger should be found");
 
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "LoggerFactory",
+            query: Some("LoggerFactory"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -360,15 +376,16 @@ fn interface_only_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let factory = results.iter().find(|r| r.fqn == "org.slf4j.LoggerFactory");
     assert!(factory.is_some(), "org.slf4j.LoggerFactory should be found");
 
     // Jakarta Servlet
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "HttpServlet",
+            query: Some("HttpServlet"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -376,6 +393,7 @@ fn interface_only_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let servlet = results.iter().find(|r| r.fqn.contains("jakarta.servlet"));
@@ -384,9 +402,9 @@ fn interface_only_symbols() {
         "jakarta.servlet.http.HttpServlet should be found"
     );
 
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Filter",
+            query: Some("Filter"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -394,6 +412,7 @@ fn interface_only_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     let filter = results.iter().find(|r| r.fqn == "jakarta.servlet.Filter");
@@ -407,7 +426,7 @@ fn search_no_results() {
     let output = cli::search::run(
         &project.project_dir,
         &SearchQuery {
-            query: "XyzNonExistentClassName12345",
+            query: Some("XyzNonExistentClassName12345"),
             symbol_type: "any",
             fqn_mode: false,
             regex_mode: false,
@@ -415,6 +434,7 @@ fn search_no_results() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         },
     )
     .expect("search with no results should succeed (not error)");
@@ -431,7 +451,7 @@ fn agentic_search_output_fields() {
     let output = cli::search::run(
         &project.project_dir,
         &SearchQuery {
-            query: "ImmutableList",
+            query: Some("ImmutableList"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -439,6 +459,7 @@ fn agentic_search_output_fields() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         },
     )
     .expect("search should succeed");
@@ -508,9 +529,9 @@ fn show_no_source_fails_with_no_decompile() {
     if let Some(dep) = no_source_dep {
         // Try to find a class FQN from this dependency
         let reader = IndexReader::open(&project.index_dir()).unwrap();
-        let (results, _count) = reader
+        let (results, _count, _) = reader
             .search(&SearchQuery {
-                query: "*",
+                query: Some("*"),
                 symbol_type: "class",
                 fqn_mode: false,
                 regex_mode: false,
@@ -518,6 +539,7 @@ fn show_no_source_fails_with_no_decompile() {
                 dependency: Some(&dep.gav()),
                 access_levels: None,
                 offset: 0,
+                scope: None,
             })
             .ok()
             .unwrap_or_default();
@@ -587,9 +609,9 @@ fn scala_clojure_symbols() {
     let reader = IndexReader::open(&project.index_dir()).expect("index should be readable");
 
     // Scala: scala.Option should be indexed with source_language == "scala"
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "Option",
+            query: Some("Option"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -597,6 +619,7 @@ fn scala_clojure_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .expect("search should succeed");
     let scala_option = results
@@ -617,9 +640,9 @@ fn scala_clojure_symbols() {
     );
 
     // Clojure: clojure.lang.PersistentVector is written in Java
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "PersistentVector",
+            query: Some("PersistentVector"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -627,6 +650,7 @@ fn scala_clojure_symbols() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .expect("search should succeed");
     let clj_pv = results
@@ -654,7 +678,8 @@ fn scala_clojure_symbols() {
 #[test]
 fn deps_lists_all_dependencies() {
     let project = require_indexed_project!();
-    let output = cli::deps::run(&project.project_dir, None, 200, 0).expect("deps should succeed");
+    let output =
+        cli::deps::run(&project.project_dir, None, None, 200, 0).expect("deps should succeed");
     assert!(
         output.total_count > 0,
         "should have at least one dependency"
@@ -672,7 +697,7 @@ fn deps_lists_all_dependencies() {
 #[test]
 fn deps_filter() {
     let project = require_indexed_project!();
-    let output = cli::deps::run(&project.project_dir, Some("com.google.*:*"), 200, 0)
+    let output = cli::deps::run(&project.project_dir, Some("com.google.*:*"), None, 200, 0)
         .expect("deps with filter should succeed");
     assert!(
         output.total_count > 0,
@@ -690,7 +715,7 @@ fn deps_filter() {
 #[test]
 fn deps_pagination() {
     let project = require_indexed_project!();
-    let output = cli::deps::run(&project.project_dir, None, 2, 0)
+    let output = cli::deps::run(&project.project_dir, None, None, 2, 0)
         .expect("deps with small limit should succeed");
     assert!(output.dependencies.len() <= 2);
     if output.total_count > 2 {
@@ -699,44 +724,50 @@ fn deps_pagination() {
 }
 
 // ---------------------------------------------------------------------------
-// list: list symbols for a dependency
+// search --dependency: list symbols for a dependency (no query)
 // ---------------------------------------------------------------------------
 
 #[test]
-fn list_symbols_for_dependency() {
+fn search_dependency_lists_symbols() {
     let project = require_indexed_project!();
-    let output = cli::list::run(
-        &project.project_dir,
-        "com.google.code.gson:gson:*",
-        &["class", "method"],
-        Some(&["public"]),
-        50,
-        0,
-    )
-    .expect("list should succeed");
+    let sq = SearchQuery {
+        query: None,
+        symbol_type: "class,method",
+        fqn_mode: false,
+        regex_mode: false,
+        limit: 50,
+        offset: 0,
+        dependency: Some("com.google.code.gson:gson:*"),
+        access_levels: Some(&["public"]),
+        scope: None,
+    };
+    let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");
     assert!(
-        !output.matched_gavs.is_empty(),
+        output.matched_gavs.as_ref().is_some_and(|g| !g.is_empty()),
         "should match at least one GAV"
     );
     assert!(
-        !output.symbols.is_empty(),
+        !output.results.is_empty(),
         "gson should have public symbols"
     );
 }
 
 #[test]
-fn list_default_type_filter() {
+fn search_dependency_type_filter() {
     let project = require_indexed_project!();
-    let output = cli::list::run(
-        &project.project_dir,
-        "com.google.code.gson:gson:*",
-        &["class", "method"],
-        Some(&["public"]),
-        200,
-        0,
-    )
-    .expect("list should succeed");
-    for sym in &output.symbols {
+    let sq = SearchQuery {
+        query: None,
+        symbol_type: "class,method",
+        fqn_mode: false,
+        regex_mode: false,
+        limit: 200,
+        offset: 0,
+        dependency: Some("com.google.code.gson:gson:*"),
+        access_levels: Some(&["public"]),
+        scope: None,
+    };
+    let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");
+    for sym in &output.results {
         assert!(
             sym.symbol_kind == classpath_surfer::model::SymbolKind::Class
                 || sym.symbol_kind == classpath_surfer::model::SymbolKind::Method,
@@ -747,32 +778,61 @@ fn list_default_type_filter() {
 }
 
 #[test]
-fn list_pagination() {
+fn search_dependency_pagination() {
     let project = require_indexed_project!();
-    let page1 = cli::list::run(
-        &project.project_dir,
-        "com.google.code.gson:gson:*",
-        &["class", "method"],
-        Some(&["public"]),
-        5,
-        0,
-    )
-    .expect("list page 1 should succeed");
+    let sq = SearchQuery {
+        query: None,
+        symbol_type: "class,method",
+        fqn_mode: false,
+        regex_mode: false,
+        limit: 5,
+        offset: 0,
+        dependency: Some("com.google.code.gson:gson:*"),
+        access_levels: Some(&["public"]),
+        scope: None,
+    };
+    let page1 = cli::search::run(&project.project_dir, &sq).expect("search page 1 should succeed");
 
-    if page1.total_symbols > 5 {
+    if page1.total_matches > 5 {
         assert!(page1.has_more, "should have more results");
 
-        let page2 = cli::list::run(
-            &project.project_dir,
-            "com.google.code.gson:gson:*",
-            &["class", "method"],
-            Some(&["public"]),
-            5,
-            5,
-        )
-        .expect("list page 2 should succeed");
-        assert!(!page2.symbols.is_empty(), "page 2 should have results");
+        let sq2 = SearchQuery { offset: 5, ..sq };
+        let page2 =
+            cli::search::run(&project.project_dir, &sq2).expect("search page 2 should succeed");
+        assert!(!page2.results.is_empty(), "page 2 should have results");
     }
+}
+
+// ---------------------------------------------------------------------------
+// Scope feature tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn search_results_have_scopes() {
+    let project = require_indexed_project!();
+    let reader = IndexReader::open(&project.index_dir()).expect("index should be readable");
+
+    let (results, _, _) = reader
+        .search(&SearchQuery {
+            query: Some("ImmutableList"),
+            symbol_type: "class",
+            fqn_mode: false,
+            regex_mode: false,
+            limit: 5,
+            offset: 0,
+            dependency: None,
+            access_levels: None,
+            scope: None,
+        })
+        .expect("search should succeed");
+
+    assert!(!results.is_empty(), "should find ImmutableList");
+    let result = &results[0];
+    assert!(
+        !result.scopes.is_empty(),
+        "scopes should not be empty for {} (index may need rebuild with --force)",
+        result.gav
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -785,9 +845,9 @@ fn smart_search_multi_keyword_and() {
     let reader = IndexReader::open(&project.index_dir()).unwrap();
 
     // "immutable list" — both must be substrings
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "immutable list",
+            query: Some("immutable list"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -795,6 +855,7 @@ fn smart_search_multi_keyword_and() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     assert!(
@@ -810,9 +871,9 @@ fn smart_search_auto_fqn() {
     let reader = IndexReader::open(&project.index_dir()).unwrap();
 
     // FQN with 2+ dots should auto-detect as exact FQN match
-    let (results, _count) = reader
+    let (results, _count, _) = reader
         .search(&SearchQuery {
-            query: "com.google.common.collect.ImmutableList",
+            query: Some("com.google.common.collect.ImmutableList"),
             symbol_type: "class",
             fqn_mode: false,
             regex_mode: false,
@@ -820,6 +881,7 @@ fn smart_search_auto_fqn() {
             dependency: None,
             access_levels: None,
             offset: 0,
+            scope: None,
         })
         .unwrap();
     assert!(

@@ -236,7 +236,7 @@ fn lookup_member_info(project_dir: &Path, fqn: &str) -> Option<(SymbolKind, Stri
     let index_dir = project_dir.join(".classpath-surfer/index");
     let reader = IndexReader::open(&index_dir).ok()?;
     let query = SearchQuery {
-        query: fqn,
+        query: Some(fqn),
         symbol_type: "any",
         fqn_mode: true,
         regex_mode: false,
@@ -244,8 +244,9 @@ fn lookup_member_info(project_dir: &Path, fqn: &str) -> Option<(SymbolKind, Stri
         offset: 0,
         dependency: None,
         access_levels: None,
+        scope: None,
     };
-    let (results, _) = reader.search(&query).ok()?;
+    let (results, _, _) = reader.search(&query).ok()?;
     let result = results.first()?;
     Some((result.symbol_kind, result.simple_name.clone()))
 }
