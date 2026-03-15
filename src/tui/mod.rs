@@ -16,7 +16,6 @@ use ratatui::prelude::*;
 pub mod highlight;
 pub mod search;
 pub mod show;
-pub mod status;
 
 /// A terminal wrapper that restores the original state on drop.
 pub struct TerminalGuard {

@@ -296,7 +296,7 @@ fn main() {
             output_mode,
             cli::status::run(&project_dir),
             cli::render::status,
-            Some(|out: &_| classpath_surfer::tui::status::run(out)),
+            None::<fn(&_) -> anyhow::Result<()>>,
         ),
         Commands::Clean => render(
             output_mode,
