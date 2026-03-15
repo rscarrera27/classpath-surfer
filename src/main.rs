@@ -280,18 +280,30 @@ fn main() {
             scope,
             limit,
             offset,
-        } => render(
-            output_mode,
-            cli::deps::run(
-                &project_dir,
-                filter.as_deref(),
-                scope.as_deref(),
-                limit,
-                offset,
-            ),
-            cli::render::deps,
-            None::<fn(&_) -> anyhow::Result<()>>,
-        ),
+        } => {
+            if output_mode == OutputMode::Tui {
+                cli::require_index(&project_dir).and_then(|()| {
+                    classpath_surfer::tui::deps::run(
+                        &project_dir,
+                        filter.as_deref(),
+                        scope.as_deref(),
+                    )
+                })
+            } else {
+                render(
+                    output_mode,
+                    cli::deps::run(
+                        &project_dir,
+                        filter.as_deref(),
+                        scope.as_deref(),
+                        limit,
+                        offset,
+                    ),
+                    cli::render::deps,
+                    None::<fn(&_) -> anyhow::Result<()>>,
+                )
+            }
+        }
         Commands::Status => render(
             output_mode,
             cli::status::run(&project_dir),

@@ -55,6 +55,19 @@ impl SearchState {
 /// Opens the index directly and fetches pages of results on demand as the
 /// user scrolls through the table.
 pub fn run_interactive(project_dir: &Path, query: &SearchQuery) -> Result<()> {
+    let mut guard = super::TerminalGuard::enter()?;
+    run_interactive_with(&mut guard, project_dir, query)
+}
+
+/// Inner implementation of [`run_interactive`] that uses an externally provided terminal guard.
+///
+/// This allows parent TUI views (e.g. deps) to share a single `TerminalGuard`
+/// while delegating to the search event loop for drill-down.
+pub fn run_interactive_with(
+    guard: &mut super::TerminalGuard,
+    project_dir: &Path,
+    query: &SearchQuery,
+) -> Result<()> {
     let index_dir = project_dir.join(".classpath-surfer/index");
     let reader = IndexReader::open(&index_dir)?;
 
@@ -75,7 +88,6 @@ pub fn run_interactive(project_dir: &Path, query: &SearchQuery) -> Result<()> {
         page_size: query.limit,
     };
 
-    let mut guard = super::TerminalGuard::enter()?;
     let mut table_state = TableState::default().with_selected(Some(0));
     let mut show_state: Option<ShowViewState> = None;
     let mut error_message: Option<String> = None;

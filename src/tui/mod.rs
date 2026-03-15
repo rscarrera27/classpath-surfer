@@ -13,6 +13,7 @@ use crossterm::{
 };
 use ratatui::prelude::*;
 
+pub mod deps;
 pub mod highlight;
 pub mod search;
 pub mod show;
