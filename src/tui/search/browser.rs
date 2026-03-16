@@ -972,6 +972,7 @@ fn render_deps_column(
         area,
         state.dep_state.offset(),
         state.dep_row_count(),
+        false,
     );
 }
 
@@ -1049,6 +1050,7 @@ fn render_pkgs_column(
         area,
         state.pkg_state.offset(),
         state.pkg_row_count(),
+        false,
     );
 }
 
@@ -1129,6 +1131,7 @@ fn render_symbols_column(
         area,
         state.symbol_state.offset(),
         state.symbols.len(),
+        state.symbols_has_more,
     );
 }
 

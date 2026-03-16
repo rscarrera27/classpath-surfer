@@ -472,14 +472,14 @@ fn search_result_classpaths_serialization() {
 }
 
 #[test]
-fn overflow_indicator_first_page() {
+fn overflow_indicator_viewport_overflow() {
     use ratatui::prelude::*;
     use ratatui::widgets::{Block, Borders, Cell, Row, Table, TableState};
 
-    // 30 rows, area height 12 → inner height 10
+    // 30 rows in a 12-high area → inner height 10 → viewport overflow
     let area = Rect::new(0, 0, 40, 12);
     let inner = area.inner(Margin::new(1, 1));
-    assert_eq!(inner.height, 10, "inner height");
+    assert_eq!(inner.height, 10);
 
     let rows: Vec<Row> = (0..30)
         .map(|i| Row::new(vec![Cell::from(format!("row {i}"))]))
@@ -492,13 +492,56 @@ fn overflow_indicator_first_page() {
     let mut buf = Buffer::empty(area);
     ratatui::widgets::StatefulWidget::render(&table, area, &mut buf, &mut state);
 
+    assert_eq!(state.offset(), 0);
+    assert!(30 > state.offset() + inner.height as usize);
+}
+
+#[test]
+fn overflow_indicator_has_more_below() {
+    use ratatui::prelude::*;
+    use ratatui::widgets::{Block, Borders, Cell, Clear, Row, Table, TableState};
+
+    // 5 loaded rows in a 12-high area → all fit, but has_more_below = true
+    let area = Rect::new(0, 0, 40, 12);
+    let inner = area.inner(Margin::new(1, 1));
+    assert_eq!(inner.height, 10);
+
+    let rows: Vec<Row> = (0..5)
+        .map(|i| Row::new(vec![Cell::from(format!("row {i}"))]))
+        .collect();
+    let table = Table::new(rows, [Constraint::Fill(1)])
+        .block(Block::default().borders(Borders::ALL))
+        .highlight_symbol(">> ");
+
+    let mut state = TableState::default().with_selected(Some(0));
+    let mut buf = Buffer::empty(area);
+    ratatui::widgets::StatefulWidget::render(&table, area, &mut buf, &mut state);
+
+    // Viewport doesn't overflow
+    assert!(5 <= state.offset() + inner.height as usize);
+
+    // Simulate render_overflow_indicators with has_more_below=true
     let offset = state.offset();
+    let total_rows = 5usize;
     let visible_height = inner.height as usize;
-    let total_rows = 30usize;
+    let viewport_overflow = total_rows > offset + visible_height;
+    assert!(!viewport_overflow);
 
-    eprintln!("offset={offset}, visible_height={visible_height}, total_rows={total_rows}");
-    eprintln!("bottom check: {total_rows} > {offset} + {visible_height} = {}", total_rows > offset + visible_height);
+    // has_more_below path: "..." at row right after last item
+    let items_shown = total_rows.saturating_sub(offset);
+    let y = inner.y + items_shown as u16;
+    assert!(
+        y < inner.y + inner.height,
+        "... should be within the inner area"
+    );
 
-    assert_eq!(offset, 0);
-    assert!(total_rows > offset + visible_height, "bottom indicator should show on first page");
+    // Render the indicator and verify it appears in the buffer
+    let dim = Style::default().fg(Color::DarkGray);
+    let rect = Rect::new(inner.x, y, inner.width, 1);
+    Clear.render(rect, &mut buf);
+    Line::from("   ...").style(dim).render(rect, &mut buf);
+
+    // Check the "..." text is at the expected position
+    let cell = &buf[(inner.x + 3, y)];
+    assert_eq!(cell.symbol(), ".");
 }

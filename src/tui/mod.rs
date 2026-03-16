@@ -60,9 +60,17 @@ pub fn wait_for_quit() -> Result<()> {
 ///
 /// `area` is the outer area (including borders). `offset` is the first visible row index
 /// (from `TableState::offset()`). `total_rows` is the total number of data rows.
-pub fn render_overflow_indicators(frame: &mut Frame, area: Rect, offset: usize, total_rows: usize) {
+/// `has_more_below` forces a bottom indicator even when all loaded rows fit in the viewport
+/// (e.g. infinite scroll with more data to load).
+pub fn render_overflow_indicators(
+    frame: &mut Frame,
+    area: Rect,
+    offset: usize,
+    total_rows: usize,
+    has_more_below: bool,
+) {
     let inner = area.inner(Margin::new(1, 1));
-    if inner.height == 0 || total_rows == 0 {
+    if inner.height == 0 {
         return;
     }
     let visible_height = inner.height as usize;
@@ -74,9 +82,18 @@ pub fn render_overflow_indicators(frame: &mut Frame, area: Rect, offset: usize, 
         frame.render_widget(Line::from("   ...").style(dim), rect);
     }
 
-    if total_rows > offset + visible_height {
+    let viewport_overflow = total_rows > offset + visible_height;
+    if viewport_overflow {
         let rect = Rect::new(inner.x, inner.y + inner.height - 1, inner.width, 1);
         frame.render_widget(Clear, rect);
         frame.render_widget(Line::from("   ...").style(dim), rect);
+    } else if has_more_below && total_rows > 0 {
+        let items_shown = total_rows.saturating_sub(offset);
+        let y = inner.y + items_shown as u16;
+        if y < inner.y + inner.height {
+            let rect = Rect::new(inner.x, y, inner.width, 1);
+            frame.render_widget(Clear, rect);
+            frame.render_widget(Line::from("   ...").style(dim), rect);
+        }
     }
 }
