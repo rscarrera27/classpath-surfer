@@ -145,6 +145,44 @@ fn agentic_deps_json_output() {
 }
 
 #[test]
+fn agentic_pkgs_json_output() {
+    let project = require_indexed_project!();
+    let output = common::cli_cmd(&project.project_dir)
+        .args(["pkgs", "--agentic"])
+        .output()
+        .unwrap();
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "exit code should be 0, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .expect("stdout should be valid JSON in agentic mode");
+    assert!(json["total_count"].as_u64().unwrap() > 0);
+    assert!(!json["packages"].as_array().unwrap().is_empty());
+    let first = &json["packages"][0];
+    assert!(first["package"].is_string());
+    assert!(first["symbol_count"].is_u64());
+}
+
+#[test]
+fn agentic_pkgs_filter() {
+    let project = require_indexed_project!();
+    let output = common::cli_cmd(&project.project_dir)
+        .args(["pkgs", "--filter", "com.google.*", "--agentic"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("should produce valid JSON");
+    assert!(json["total_count"].as_u64().unwrap() > 0);
+    assert_eq!(json["filter"], "com.google.*");
+}
+
+#[test]
 fn agentic_search_dependency_json_output() {
     let project = require_indexed_project!();
     let output = common::cli_cmd(&project.project_dir)

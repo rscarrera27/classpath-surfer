@@ -192,6 +192,33 @@ pub struct CleanOutput {
     pub items_removed: Vec<String>,
 }
 
+/// Structured output for the `pkgs` command.
+#[derive(Debug, Serialize)]
+pub struct PkgsOutput {
+    /// Filter pattern applied (if any).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<String>,
+    /// Total number of packages matching the filter.
+    pub total_count: usize,
+    /// Offset used for this page of results.
+    pub offset: usize,
+    /// Limit used for this page of results.
+    pub limit: usize,
+    /// Whether more results are available beyond this page.
+    pub has_more: bool,
+    /// Package entries with symbol counts.
+    pub packages: Vec<PkgInfo>,
+}
+
+/// A single package entry in [`PkgsOutput`].
+#[derive(Debug, Serialize)]
+pub struct PkgInfo {
+    /// Java package name (e.g. `com.google.common.collect`).
+    pub package: String,
+    /// Number of indexed symbols in this package.
+    pub symbol_count: usize,
+}
+
 /// Structured output for the `deps` command.
 #[derive(Debug, Serialize)]
 pub struct DepsOutput {

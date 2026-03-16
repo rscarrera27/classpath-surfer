@@ -1,6 +1,6 @@
 //! CLI subcommand dispatch.
 //!
-//! Each subcommand (`init`, `refresh`, `search`, `show`, `deps`, `status`, `clean`)
+//! Each subcommand (`init`, `refresh`, `search`, `show`, `deps`, `pkgs`, `status`, `clean`)
 //! lives in its own module and is wired into the top-level clap `Commands` enum.
 //! The `render` module provides plain-text renderers for non-TTY output.
 
@@ -13,6 +13,8 @@ use crate::staleness;
 
 /// List indexed dependencies with symbol counts.
 pub mod deps;
+/// List unique Java packages with symbol counts.
+pub mod pkgs;
 
 /// Remove index data and staleness markers.
 pub mod clean;

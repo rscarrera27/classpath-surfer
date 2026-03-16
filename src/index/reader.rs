@@ -312,6 +312,38 @@ impl IndexReader {
         Ok(count)
     }
 
+    /// List all unique packages in the index with their symbol counts.
+    ///
+    /// Iterates the term dictionary of the `package` field across all segments,
+    /// deduplicating via a `BTreeMap`. Returns package-sorted `(package, count)` pairs.
+    pub fn list_packages(&self) -> Result<Vec<(String, usize)>> {
+        let schema = self.index.schema();
+        let searcher = self.reader.searcher();
+        let pkg_field = schema.get_field("package").unwrap();
+
+        let mut pkg_set: BTreeMap<String, ()> = BTreeMap::new();
+        for segment_reader in searcher.segment_readers() {
+            let inverted_index = segment_reader.inverted_index(pkg_field)?;
+            let mut term_stream = inverted_index.terms().stream()?;
+            while term_stream.advance() {
+                let term_bytes = term_stream.key();
+                if let Ok(term_str) = std::str::from_utf8(term_bytes) {
+                    pkg_set.entry(term_str.to_string()).or_insert(());
+                }
+            }
+        }
+
+        let mut results = Vec::with_capacity(pkg_set.len());
+        for pkg in pkg_set.into_keys() {
+            let term = tantivy::Term::from_field_text(pkg_field, &pkg);
+            let query = TermQuery::new(term, IndexRecordOption::Basic);
+            let count = searcher.search(&query, &Count)?;
+            results.push((pkg, count));
+        }
+
+        Ok(results)
+    }
+
     /// List all unique GAVs in the index with their symbol counts.
     ///
     /// Iterates the term dictionary of the `gav` field across all segments,

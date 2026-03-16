@@ -5,8 +5,8 @@
 //! columns separated by `\t`, suitable for `cut`, `awk`, `sort`, and `grep`.
 
 use crate::model::{
-    CleanOutput, DepsOutput, InitOutput, RefreshOutput, SearchOutput, ShowOutput, StatusOutput,
-    format_lang_display,
+    CleanOutput, DepsOutput, InitOutput, PkgsOutput, RefreshOutput, SearchOutput, ShowOutput,
+    StatusOutput, format_lang_display,
 };
 
 /// Render search results as a compact list (used when listing symbols without a query).
@@ -223,6 +223,33 @@ pub fn deps(output: &DepsOutput) {
             dep.symbol_count,
             format_scopes(&dep.scopes)
         );
+    }
+}
+
+/// Render package list as TAB-separated plain text.
+///
+/// Columns: `PACKAGE\tSYMBOL_COUNT`
+pub fn pkgs(output: &PkgsOutput) {
+    if output.packages.is_empty() {
+        if let Some(ref filter) = output.filter {
+            println!("No packages matching '{filter}'.");
+        } else {
+            println!("No packages found.");
+        }
+        return;
+    }
+
+    if output.has_more {
+        eprintln!(
+            "Showing {} of {} packages. Use --offset {} to see more.",
+            output.packages.len(),
+            output.total_count,
+            output.offset + output.packages.len()
+        );
+    }
+
+    for pkg in &output.packages {
+        println!("{}\t{}", pkg.package, pkg.symbol_count);
     }
 }
 

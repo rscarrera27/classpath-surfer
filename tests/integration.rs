@@ -470,6 +470,55 @@ fn scala_clojure_symbols() {
 }
 
 // ---------------------------------------------------------------------------
+// pkgs: list packages
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pkgs_lists_all_packages() {
+    let project = require_indexed_project!();
+    let output =
+        cli::pkgs::run(&project.project_dir, None, 500, 0).expect("pkgs should succeed");
+    assert!(output.total_count > 0, "should have at least one package");
+    assert!(!output.packages.is_empty());
+    for pkg in &output.packages {
+        assert!(
+            pkg.symbol_count > 0,
+            "each package should have symbols: {}",
+            pkg.package
+        );
+    }
+}
+
+#[test]
+fn pkgs_filter() {
+    let project = require_indexed_project!();
+    let output = cli::pkgs::run(&project.project_dir, Some("com.google.*"), 500, 0)
+        .expect("pkgs with filter should succeed");
+    assert!(
+        output.total_count > 0,
+        "should have at least one com.google package"
+    );
+    for pkg in &output.packages {
+        assert!(
+            pkg.package.starts_with("com.google."),
+            "filtered package should match: {}",
+            pkg.package
+        );
+    }
+}
+
+#[test]
+fn pkgs_pagination() {
+    let project = require_indexed_project!();
+    let output =
+        cli::pkgs::run(&project.project_dir, None, 2, 0).expect("pkgs with small limit");
+    assert!(output.packages.len() <= 2);
+    if output.total_count > 2 {
+        assert!(output.has_more, "should have more results");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // deps: list dependencies
 // ---------------------------------------------------------------------------
 

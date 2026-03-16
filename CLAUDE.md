@@ -94,7 +94,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps  # 문서 빌드 검증
 - `proto/kotlin_metadata.proto` — Kotlin 메타데이터 protobuf 스키마 (prost-build로 자동 생성)
 - `build.rs` — prost-build 설정 (proto 컴파일)
 - `scripts/sync-kotlin-proto.sh` — upstream Kotlin proto 동기화 도우미
-- `src/cli/` — 서브커맨드 핸들러 (`init`, `refresh`, `search`, `show`, `deps`, `status`, `clean`)
+- `src/cli/` — 서브커맨드 핸들러 (`init`, `refresh`, `search`, `show`, `deps`, `pkgs`, `status`, `clean`)
 - `src/cli/render.rs` — Plain 텍스트 렌더러
 - `src/error.rs` — 분류된 CLI 에러 타입 (`CliError`: exit code, error_code, retryable)
 - `src/gradle/` — Gradle init script 및 실행기

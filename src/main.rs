@@ -216,6 +216,26 @@ EXAMPLES:
         pagination: Pagination,
     },
 
+    /// List unique Java packages with symbol counts
+    #[command(
+        long_about = "List unique Java packages in the index with symbol counts.\n\n\
+            Shows all distinct package names found across indexed dependencies.\n\
+            Useful for discovering package names to use with `search --package`.",
+        after_help = "\
+EXAMPLES:
+  classpath-surfer pkgs
+  classpath-surfer pkgs --filter 'com.google.*'
+  classpath-surfer pkgs --limit 10 --offset 20"
+    )]
+    Pkgs {
+        /// Filter packages by pattern (e.g., "com.google.*")
+        #[arg(long)]
+        filter: Option<String>,
+
+        #[command(flatten)]
+        pagination: Pagination,
+    },
+
     /// Show index status
     #[command(
         long_about = "Show index status.\n\n\
@@ -423,6 +443,17 @@ fn main() {
                 )
             }
         }
+        Commands::Pkgs { filter, pagination } => render(
+            output_mode,
+            cli::pkgs::run(
+                &project_dir,
+                filter.as_deref(),
+                pagination.limit,
+                pagination.offset,
+            ),
+            cli::render::pkgs,
+            None::<fn(&_) -> anyhow::Result<()>>,
+        ),
         Commands::Status => render(
             output_mode,
             cli::status::run(&project_dir),

@@ -20,6 +20,7 @@ Use these flags when relevant to the user's request:
   - Query can be omitted with `--dependency` to list all symbols in that dependency
 - `--package <pattern>` — filter by Java package (glob supported, e.g., `"com.google.common.collect.*"`)
   - Query can be omitted with `--package` to list all symbols in matching packages
+  - Use `classpath-surfer pkgs --agentic` to discover available package names
 - `--access public,protected` — include non-public symbols (default: `public`; use `--access all` for everything)
 - `--scope compileClasspath` or `--scope runtimeClasspath` — narrow by configuration scope
 - `--offset N` — paginate results (use when `total_matches` exceeds displayed count)
