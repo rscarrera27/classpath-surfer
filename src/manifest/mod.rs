@@ -60,7 +60,6 @@ pub struct DependencyInfo {
     /// Absolute path to the source JAR, if available.
     pub source_jar_path: Option<PathBuf>,
     /// The classpath that pulled in this dependency (e.g. `"compile"`).
-    #[serde(rename = "scope")]
     pub classpath: String,
 }
 
