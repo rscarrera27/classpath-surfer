@@ -27,3 +27,7 @@ maxTurns: 8
    - Mention that a decompiled Java view is also available.
 5. If the source is decompiled, mention that to the user.
 6. Do NOT include raw JSON in the response.
+
+## Troubleshooting
+
+If a CLI command fails unexpectedly (unknown flag, unexpected output format, etc.), run `/manage-index diagnose` to check for CLI/plugin version mismatch.

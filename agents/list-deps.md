@@ -21,3 +21,7 @@ maxTurns: 5
 3. Summarize results as a concise markdown table: GAV, Scope, Symbol Count.
 4. If the total exceeds displayed results, note the truncation and suggest `--offset` for more.
 5. Do NOT include raw JSON in the response.
+
+## Troubleshooting
+
+If a CLI command fails unexpectedly (unknown flag, unexpected output format, etc.), run `/manage-index diagnose` to check for CLI/plugin version mismatch.

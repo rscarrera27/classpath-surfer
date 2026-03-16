@@ -40,3 +40,7 @@ The search mode is auto-detected from the query string:
    - Use Kotlin signature if available, otherwise Java signature.
 4. If `total_matches` exceeds displayed results, note the truncation.
 5. Do NOT include raw JSON in the response.
+
+## Troubleshooting
+
+If a CLI command fails unexpectedly (unknown flag, unexpected output format, etc.), run `/manage-index diagnose` to check for CLI/plugin version mismatch.

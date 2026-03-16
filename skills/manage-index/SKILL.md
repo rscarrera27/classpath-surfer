@@ -1,8 +1,8 @@
 ---
 name: manage-index
-description: "Manage the classpath-surfer symbol index: init, refresh, check status, or clean. Use when the user wants to initialize, update, inspect, or remove the dependency index."
-allowed-tools: Bash(classpath-surfer *)
-argument-hint: "[action: init|refresh|status|clean]"
+description: "Manage the classpath-surfer symbol index: init, refresh, check status, clean, or diagnose version issues. Use when the user wants to initialize, update, inspect, or remove the dependency index, or troubleshoot CLI/plugin version mismatch."
+allowed-tools: Bash(classpath-surfer *), Read
+argument-hint: "[action: init|refresh|status|clean|diagnose]"
 disable-model-invocation: true
 ---
 
@@ -14,5 +14,10 @@ Determine the action from "$ARGUMENTS" (default: `refresh`):
 - **refresh**: `classpath-surfer refresh`
 - **status**: `classpath-surfer status --agentic`
 - **clean**: `classpath-surfer clean`
+- **diagnose**: Check CLI/plugin version compatibility:
+  1. Run `classpath-surfer --version` to get the installed CLI version.
+  2. Read `.claude-plugin/plugin.json` and extract the `"version"` field.
+  3. Compare the two: if the major.minor versions differ, report the mismatch and suggest updating the CLI (`cargo install classpath-surfer`) or the plugin (`/install-plugin https://github.com/rscarrera27/classpath-surfer`).
+  4. If they match, report that versions are compatible.
 
-After the action completes, run `classpath-surfer status --agentic` (unless the action was `clean`) and report the result to the user.
+After the action completes, run `classpath-surfer status --agentic` (unless the action was `clean` or `diagnose`) and report the result to the user.
