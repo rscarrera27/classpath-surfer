@@ -74,9 +74,12 @@ struct SymbolDoc {
 
 | 카테고리 | 필드 | 옵션 | 용도 |
 |---------|------|------|------|
-| **Identity** | `gav`, `symbol_kind`, `fqn`, `package`, `class_name`, `classpaths` | `STRING \| STORED` | exact match 필터링 |
+| **Identity** | `gav`, `fqn`, `package`, `class_name`, `classpaths` | `STRING \| STORED` | exact match 필터링 |
+| **Identity** | `symbol_kind`, `access_level` | `STRING \| STORED \| FAST` | exact match 필터링 + 향후 집계/정렬용 columnar 저장 |
 | **Search** | `simple_name`, `name_parts` | `TEXT \| STORED` / `TEXT` | 토큰화 검색 |
-| **Metadata** | `descriptor`, `signature_display`, `access_flags`, `has_source`, `source_path`, `source_language`, `source_file_name`, `kotlin_signature_display` | `STORED` | 결과에 포함, 검색 불가 |
+| **Search (reversed)** | `simple_name_rev` | `TEXT` | suffix glob 가속 (reversed simple_name) |
+| **Search (reversed)** | `package_rev` | `STRING` | suffix glob 가속 (reversed package) |
+| **Metadata** | `descriptor`, `signature_java`, `signature_kotlin`, `access_flags`, `source`, `source_path`, `source_language`, `source_file_name` | `STORED` (일부 `STRING \| STORED`) | 결과에 포함, 검색 불가 |
 
 ## 모듈별 역할
 
@@ -90,6 +93,7 @@ struct SymbolDoc {
 | `index/writer.rs` | `index_dependency()`: SourceTable 구축 + 심볼 추출 + 인덱싱 통합 |
 | `index/writer.rs` | `add_symbol_doc()`: SymbolDoc → Tantivy document 변환 |
 | `index/schema.rs` | `build_schema()`: Tantivy 필드 정의 |
+| `index/compat.rs` | `REQUIRED_FIELDS`: 스키마 호환성 검증용 필수 필드 상수 |
 
 ## package 선언 파싱 (`extract_package_declaration`)
 
@@ -113,5 +117,4 @@ compute_diff(current_manifest, previous_manifest)
 
 ## 스키마 마이그레이션
 
-`open_or_create_index()`에서 기존 인덱스의 스키마가 필수 필드를 포함하지 않으면
-인덱스 디렉토리를 삭제하고 새로 생성 (파괴적 마이그레이션).
+`open_or_create_index()`에서 기존 인덱스의 스키마가 `REQUIRED_FIELDS`(`src/index/compat.rs`)에 정의된 필수 필드를 포함하지 않으면 인덱스 디렉토리를 삭제하고 새로 생성 (파괴적 마이그레이션).

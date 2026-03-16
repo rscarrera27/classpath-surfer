@@ -57,7 +57,7 @@ classpath-surfer는 파이프라인 아키텍처를 따릅니다:
 
 ## 인덱스 스키마 변경
 
-`src/index/schema.rs`의 Tantivy 인덱스 스키마를 수정하는 경우, **반드시** reader(`src/index/reader.rs`)와 writer(`src/index/writer.rs`)를 함께 업데이트해야 합니다.
+`src/index/schema.rs`의 Tantivy 인덱스 스키마를 수정하는 경우, **반드시** reader(`src/index/reader.rs`), writer(`src/index/writer.rs`), 그리고 `src/index/compat.rs`의 `REQUIRED_FIELDS` 상수를 함께 업데이트해야 합니다.
 
 ## 코드 스타일
 

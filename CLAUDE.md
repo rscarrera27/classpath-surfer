@@ -99,6 +99,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps  # 문서 빌드 검증
 - `src/error.rs` — 분류된 CLI 에러 타입 (`CliError`: exit code, error_code, retryable)
 - `src/gradle/` — Gradle init script 및 실행기
 - `src/index/` — Tantivy 스키마 정의, 읽기/쓰기
+- `src/index/compat.rs` — 스키마 호환성 필수 필드 상수 (`REQUIRED_FIELDS`)
 - `src/manifest/` — classpath 매니페스트 모델, 병합, 차분
 - `src/output.rs` — 출력 모드 enum (`Agentic`/`TUI`/`Plain`), JSON emit 헬퍼
 - `src/model/mod.rs` — 도메인 타입 (`SymbolKind`, `AccessLevel`, `SearchResult` 등 — `ValueEnum` derive 포함)
@@ -125,7 +126,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps  # 문서 빌드 검증
 
 - 새 서브커맨드 추가 시: `src/cli/`에 모듈 생성 → `Commands` enum에 variant 추가 → `main.rs`에서 매칭
 - 새 서브커맨드 추가 시: handler는 `Result<XxxOutput>`을 반환하고, `src/cli/render.rs`에 Plain 렌더러, `src/tui/`에 TUI 렌더러(필요 시), `main.rs`에 OutputMode 분기를 추가
-- 인덱스 스키마 변경 시: `src/index/schema.rs` 수정 후 reader/writer 동기화 필수
+- 인덱스 스키마 변경 시: `src/index/schema.rs` 수정 후 reader/writer 동기화 + `src/index/compat.rs`의 `REQUIRED_FIELDS`에 새 필드 추가 필수
 - 커밋 전 `cargo clippy && cargo fmt -- --check` 통과 확인
 - 사용자 대면 문서(README, CONTRIBUTING, GitHub 템플릿 등)는 영어와 한국어를 공동 제1언어로 유지
 - CHANGELOG 파일 없음 — 릴리즈 노트는 GitHub Releases로 관리

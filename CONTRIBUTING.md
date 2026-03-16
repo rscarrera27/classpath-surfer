@@ -57,7 +57,7 @@ classpath-surfer follows a pipeline architecture:
 
 ## Index Schema Changes
 
-If you modify the Tantivy index schema in `src/index/schema.rs`, you **must** update both the reader (`src/index/reader.rs`) and writer (`src/index/writer.rs`) to stay in sync.
+If you modify the Tantivy index schema in `src/index/schema.rs`, you **must** update the reader (`src/index/reader.rs`), writer (`src/index/writer.rs`), and the `REQUIRED_FIELDS` constant in `src/index/compat.rs` to stay in sync.
 
 ## Code Style
 
