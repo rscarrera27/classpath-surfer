@@ -608,8 +608,6 @@ fn search_dependency_lists_symbols() {
     let sq = SearchQuery {
         query: None,
         symbol_types: &[SymbolKind::Class, SymbolKind::Method],
-        fqn_mode: false,
-        regex_mode: false,
         limit: 50,
         offset: 0,
         dependency: Some("com.google.code.gson:gson:*"),
@@ -634,8 +632,6 @@ fn search_dependency_type_filter() {
     let sq = SearchQuery {
         query: None,
         symbol_types: &[SymbolKind::Class, SymbolKind::Method],
-        fqn_mode: false,
-        regex_mode: false,
         limit: 200,
         offset: 0,
         dependency: Some("com.google.code.gson:gson:*"),
@@ -660,8 +656,6 @@ fn search_dependency_pagination() {
     let sq = SearchQuery {
         query: None,
         symbol_types: &[SymbolKind::Class, SymbolKind::Method],
-        fqn_mode: false,
-        regex_mode: false,
         limit: 5,
         offset: 0,
         dependency: Some("com.google.code.gson:gson:*"),
@@ -988,8 +982,6 @@ fn search_package_standalone() {
     let sq = SearchQuery {
         query: None,
         symbol_types: &[SymbolKind::Class],
-        fqn_mode: false,
-        regex_mode: false,
         limit: 50,
         offset: 0,
         dependency: None,
@@ -1024,8 +1016,6 @@ fn search_package_with_dependency() {
     let sq = SearchQuery {
         query: None,
         symbol_types: &[SymbolKind::Class],
-        fqn_mode: false,
-        regex_mode: false,
         limit: 50,
         offset: 0,
         dependency: Some("com.google.code.gson:gson:*"),

@@ -12,7 +12,7 @@ use crate::model::{DepInfo, DepsOutput};
 /// List indexed dependencies, optionally filtered by a glob pattern and/or scope.
 pub fn run(
     project_dir: &Path,
-    filter: Option<&str>,
+    query: Option<&str>,
     scope: Option<&str>,
     limit: usize,
     offset: usize,
@@ -33,10 +33,10 @@ pub fn run(
         std::collections::HashMap::new()
     };
 
-    let filtered: Vec<&(String, usize)> = if let Some(pattern) = filter {
+    let filtered: Vec<&(String, usize)> = if let Some(pattern) = query {
         all_gavs
             .iter()
-            .filter(|(gav, _)| super::matches_gav_pattern(gav, pattern))
+            .filter(|(gav, _)| super::matches_glob_pattern(gav, pattern))
             .collect()
     } else {
         all_gavs.iter().collect()
@@ -77,7 +77,7 @@ pub fn run(
     let has_more = offset + page.len() < total_count;
 
     Ok(DepsOutput {
-        filter: filter.map(|s| s.to_string()),
+        query: query.map(|s| s.to_string()),
         total_count,
         offset,
         limit,

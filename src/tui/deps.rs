@@ -18,7 +18,7 @@ use crate::model::{DepInfo, SearchQuery};
 /// Loads all dependencies matching the optional filters, then enters an event
 /// loop where the user can navigate and press Enter to drill down into a
 /// dependency's symbols via the search TUI.
-pub fn run(project_dir: &Path, filter: Option<&str>, scope: Option<&str>) -> Result<()> {
+pub fn run(project_dir: &Path, query: Option<&str>, scope: Option<&str>) -> Result<()> {
     // Note: require_index is called by main.rs before entering TUI, so not needed here.
 
     let index_dir = project_dir.join(".classpath-surfer/index");
@@ -36,10 +36,10 @@ pub fn run(project_dir: &Path, filter: Option<&str>, scope: Option<&str>) -> Res
     };
 
     // Apply filters
-    let filtered: Vec<&(String, usize)> = if let Some(pattern) = filter {
+    let filtered: Vec<&(String, usize)> = if let Some(pattern) = query {
         all_gavs
             .iter()
-            .filter(|(gav, _)| cli::matches_gav_pattern(gav, pattern))
+            .filter(|(gav, _)| cli::matches_glob_pattern(gav, pattern))
             .collect()
     } else {
         all_gavs.iter().collect()
@@ -75,7 +75,7 @@ pub fn run(project_dir: &Path, filter: Option<&str>, scope: Option<&str>) -> Res
         .collect();
 
     if deps.is_empty() {
-        if let Some(pattern) = filter {
+        if let Some(pattern) = query {
             eprintln!("No dependencies matching '{pattern}'.");
         } else {
             eprintln!("No dependencies found.");
@@ -88,7 +88,7 @@ pub fn run(project_dir: &Path, filter: Option<&str>, scope: Option<&str>) -> Res
 
     loop {
         guard.terminal.draw(|frame| {
-            render_deps_table(frame, frame.area(), &deps, &mut table_state, filter);
+            render_deps_table(frame, frame.area(), &deps, &mut table_state, query);
         })?;
 
         if let Event::Key(key) = event::read()? {
@@ -116,8 +116,6 @@ pub fn run(project_dir: &Path, filter: Option<&str>, scope: Option<&str>) -> Res
                     let query = SearchQuery {
                         query: None,
                         symbol_types: &[],
-                        fqn_mode: false,
-                        regex_mode: false,
                         limit: 50,
                         offset: 0,
                         dependency: Some(selected_gav),
@@ -148,7 +146,7 @@ fn render_deps_table(
     area: Rect,
     deps: &[DepInfo],
     table_state: &mut TableState,
-    filter: Option<&str>,
+    query: Option<&str>,
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -188,7 +186,7 @@ fn render_deps_table(
         Constraint::Length(20),
     ];
 
-    let title = if let Some(pattern) = filter {
+    let title = if let Some(pattern) = query {
         format!(
             " Dependencies matching '{}' ({} total) ",
             pattern,

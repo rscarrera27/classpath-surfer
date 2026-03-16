@@ -97,35 +97,27 @@ EXAMPLES:
     /// Search for symbols in indexed dependencies
     #[command(
         long_about = "Search for symbols in indexed dependencies.\n\n\
-            Supports fuzzy text search, exact FQN matching (--fqn), and regex patterns\n\
-            (--regex). Results can be filtered by symbol type, access level, dependency\n\
+            Supports smart text search, glob patterns (*, ?), and auto-detected FQN\n\
+            matching. Results can be filtered by symbol type, access level, dependency\n\
             GAV pattern, Java package pattern, and configuration scope. When --dependency\n\
             or --package is used without a query, lists all symbols in matching entries.",
         after_help = "\
 EXAMPLES:
   classpath-surfer search ImmutableList
-  classpath-surfer search --fqn com.google.common.collect.ImmutableList
-  classpath-surfer search --regex 'Immutable.*List'
+  classpath-surfer search 'Immutable*List'
+  classpath-surfer search 'com.google.common.collect.Immutable*'
   classpath-surfer search --dependency 'com.google.*:guava:*'
   classpath-surfer search --package 'com.google.common.collect'
   classpath-surfer search ImmutableList --type class --access public,protected
   classpath-surfer search ImmutableList --agentic"
     )]
     Search {
-        /// Symbol name or pattern to search (optional when --dependency is set)
+        /// Symbol name, FQN, or glob pattern (optional when --dependency is set)
         query: Option<String>,
 
         /// Filter by symbol type (comma-separated)
         #[arg(long, value_delimiter = ',')]
         r#type: Vec<SymbolKind>,
-
-        /// Treat query as fully qualified name (exact match)
-        #[arg(long)]
-        fqn: bool,
-
-        /// Treat query as a regex pattern
-        #[arg(long)]
-        regex: bool,
 
         /// Maximum number of results (default: 20 for agentic/plain, 50 for TUI)
         #[arg(long)]
@@ -195,18 +187,17 @@ EXAMPLES:
     #[command(
         long_about = "List indexed dependencies with symbol counts.\n\n\
             Shows GAV coordinates, symbol counts, and configuration scopes for all\n\
-            indexed dependencies. Supports GAV pattern filtering and pagination.",
+            indexed dependencies. Supports GAV glob pattern filtering and pagination.",
         after_help = "\
 EXAMPLES:
   classpath-surfer deps
-  classpath-surfer deps --filter 'com.google.*:*'
+  classpath-surfer deps 'com.google.*:*'
   classpath-surfer deps --scope compileClasspath
   classpath-surfer deps --limit 10 --offset 20"
     )]
     Deps {
         /// Filter dependencies by GAV pattern (e.g., "com.google.*:*")
-        #[arg(long)]
-        filter: Option<String>,
+        query: Option<String>,
 
         /// Filter by configuration scope (e.g., compileClasspath, runtimeClasspath)
         #[arg(long)]
@@ -224,14 +215,13 @@ EXAMPLES:
         after_help = "\
 EXAMPLES:
   classpath-surfer pkgs
-  classpath-surfer pkgs --filter 'com.google.*'
+  classpath-surfer pkgs 'com.google.*'
   classpath-surfer pkgs --dependency 'com.google.*:guava:*'
   classpath-surfer pkgs --limit 10 --offset 20"
     )]
     Pkgs {
         /// Filter packages by pattern (e.g., "com.google.*")
-        #[arg(long)]
-        filter: Option<String>,
+        query: Option<String>,
 
         /// Restrict to dependencies matching a GAV pattern (e.g., "com.google.*:guava:*")
         #[arg(long)]
@@ -320,8 +310,6 @@ fn main() {
         Commands::Search {
             query,
             r#type,
-            fqn,
-            regex,
             limit,
             offset,
             access,
@@ -356,8 +344,6 @@ fn main() {
                 let sq = SearchQuery {
                     query: query.as_deref(),
                     symbol_types: &r#type,
-                    fqn_mode: fqn,
-                    regex_mode: regex,
                     limit: effective_limit,
                     dependency: dependency.as_deref(),
                     access_levels: &access_levels,
@@ -373,8 +359,6 @@ fn main() {
                 let sq = SearchQuery {
                     query: query.as_deref(),
                     symbol_types: &r#type,
-                    fqn_mode: fqn,
-                    regex_mode: regex,
                     limit: effective_limit,
                     dependency: dependency.as_deref(),
                     access_levels: &access_levels,
@@ -421,7 +405,7 @@ fn main() {
             )
         }
         Commands::Deps {
-            filter,
+            query,
             scope,
             pagination,
         } => {
@@ -429,7 +413,7 @@ fn main() {
                 cli::require_index(&project_dir).and_then(|()| {
                     classpath_surfer::tui::deps::run(
                         &project_dir,
-                        filter.as_deref(),
+                        query.as_deref(),
                         scope.as_deref(),
                     )
                 })
@@ -438,7 +422,7 @@ fn main() {
                     output_mode,
                     cli::deps::run(
                         &project_dir,
-                        filter.as_deref(),
+                        query.as_deref(),
                         scope.as_deref(),
                         pagination.limit,
                         pagination.offset,
@@ -449,14 +433,14 @@ fn main() {
             }
         }
         Commands::Pkgs {
-            filter,
+            query,
             dependency,
             pagination,
         } => render(
             output_mode,
             cli::pkgs::run(
                 &project_dir,
-                filter.as_deref(),
+                query.as_deref(),
                 dependency.as_deref(),
                 pagination.limit,
                 pagination.offset,

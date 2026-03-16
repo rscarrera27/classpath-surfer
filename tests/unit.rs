@@ -183,66 +183,82 @@ fn clean_command() {
 }
 
 // ---------------------------------------------------------------------------
-// GAV pattern matching
+// Glob pattern matching
 // ---------------------------------------------------------------------------
 
 #[test]
-fn gav_pattern_exact_match() {
-    assert!(cli::matches_gav_pattern(
+fn glob_pattern_exact_match() {
+    assert!(cli::matches_glob_pattern(
         "com.google.guava:guava:33.0-jre",
         "com.google.guava:guava:33.0-jre"
     ));
-    assert!(!cli::matches_gav_pattern(
+    assert!(!cli::matches_glob_pattern(
         "com.google.guava:guava:33.0-jre",
         "com.google.guava:guava:34.0-jre"
     ));
 }
 
 #[test]
-fn gav_pattern_wildcard_version() {
-    assert!(cli::matches_gav_pattern(
+fn glob_pattern_wildcard_version() {
+    assert!(cli::matches_glob_pattern(
         "com.google.guava:guava:33.0-jre",
         "com.google.guava:guava:*"
     ));
-    assert!(!cli::matches_gav_pattern(
+    assert!(!cli::matches_glob_pattern(
         "io.netty:netty-all:4.1",
         "com.google.guava:guava:*"
     ));
 }
 
 #[test]
-fn gav_pattern_wildcard_group() {
-    assert!(cli::matches_gav_pattern(
+fn glob_pattern_wildcard_group() {
+    assert!(cli::matches_glob_pattern(
         "com.google.guava:guava:33.0-jre",
         "com.google.*:*"
     ));
-    assert!(cli::matches_gav_pattern(
+    assert!(cli::matches_glob_pattern(
         "com.google.code.gson:gson:2.11",
         "com.google.*:*"
     ));
-    assert!(!cli::matches_gav_pattern(
+    assert!(!cli::matches_glob_pattern(
         "io.netty:netty-all:4.1",
         "com.google.*:*"
     ));
 }
 
 #[test]
-fn gav_pattern_wildcard_artifact() {
-    assert!(cli::matches_gav_pattern(
+fn glob_pattern_wildcard_artifact() {
+    assert!(cli::matches_glob_pattern(
         "io.netty:netty-all:4.1",
         "*:netty-*:*"
     ));
-    assert!(!cli::matches_gav_pattern(
+    assert!(!cli::matches_glob_pattern(
         "com.google.guava:guava:33.0",
         "*:netty-*:*"
     ));
 }
 
 #[test]
-fn gav_pattern_star_only() {
-    assert!(cli::matches_gav_pattern(
+fn glob_pattern_star_only() {
+    assert!(cli::matches_glob_pattern(
         "com.google.guava:guava:33.0-jre",
         "*"
+    ));
+}
+
+#[test]
+fn glob_pattern_question_mark() {
+    assert!(cli::matches_glob_pattern(
+        "com.google.guava:guava:33.0-jre",
+        "com.google.?uava:guava:*"
+    ));
+    assert!(!cli::matches_glob_pattern(
+        "com.google.guava:guava:33.0-jre",
+        "com.google.?:guava:*"
+    ));
+    assert!(cli::matches_glob_pattern(
+        "io.netty:netty-all:4.1",
+        "*:netty-?ll:*"
     ));
 }
 
@@ -261,8 +277,6 @@ fn search_without_index() {
         &SearchQuery {
             query: Some("Foo"),
             symbol_types: &[],
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
             dependency: None,
             access_levels: &[],
@@ -303,8 +317,6 @@ fn agentic_error_output() {
         &SearchQuery {
             query: Some("Foo"),
             symbol_types: &[],
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
             dependency: None,
             access_levels: &[],
@@ -340,8 +352,6 @@ fn agentic_exit_codes() {
         &SearchQuery {
             query: Some("Foo"),
             symbol_types: &[],
-            fqn_mode: false,
-            regex_mode: false,
             limit: 10,
             dependency: None,
             access_levels: &[],

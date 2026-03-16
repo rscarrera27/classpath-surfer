@@ -284,14 +284,15 @@ fn apply_focus(view: &mut SourceView, symbol_line: Option<usize>, context: usize
 }
 
 /// Look up FQN in the index to determine symbol_kind and simple_name.
+///
+/// FQNs always have 2+ dots, so the auto-detect logic in `build_base_query`
+/// treats them as exact FQN matches — no explicit mode flag needed.
 fn lookup_member_info(project_dir: &Path, fqn: &str) -> Option<(SymbolKind, String)> {
     let index_dir = project_dir.join(".classpath-surfer/index");
     let reader = IndexReader::open(&index_dir).ok()?;
     let query = SearchQuery {
         query: Some(fqn),
         symbol_types: &[],
-        fqn_mode: true,
-        regex_mode: false,
         limit: 1,
         offset: 0,
         dependency: None,

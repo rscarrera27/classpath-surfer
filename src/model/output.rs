@@ -15,17 +15,19 @@ use super::{AccessLevel, SearchResult, SourceOrigin, SymbolKind};
 /// Either `query` or `dependency` (or both) must be provided.  When `query`
 /// is `None` and `dependency` is set, all symbols for the matching
 /// dependencies are returned (sorted by kind then FQN).
+///
+/// The query string is interpreted automatically:
+/// - Glob characters (`*`, `?`) trigger glob matching on FQN (2+ dots) or
+///   simple name (otherwise).
+/// - Queries with 2+ dots are treated as exact FQN matches.
+/// - All other queries use smart token search with prefix matching.
 #[derive(Debug)]
 pub struct SearchQuery<'a> {
-    /// Symbol name, FQN, or regex pattern.  `None` to list all symbols
+    /// Symbol name, FQN, or glob pattern.  `None` to list all symbols
     /// (requires `dependency` to be set).
     pub query: Option<&'a str>,
     /// Filter by symbol kind.  Empty slice = any (no filter).
     pub symbol_types: &'a [SymbolKind],
-    /// Exact FQN match mode.
-    pub fqn_mode: bool,
-    /// Regex search mode.
-    pub regex_mode: bool,
     /// Maximum number of results.
     pub limit: usize,
     /// Number of results to skip (for pagination).
@@ -36,7 +38,7 @@ pub struct SearchQuery<'a> {
     pub access_levels: &'a [AccessLevel],
     /// Filter results to a specific configuration scope (e.g. `"compileClasspath"`).
     pub scope: Option<&'a str>,
-    /// Filter results by Java package pattern (glob with `*` wildcards, e.g. `"com.google.common.*"`).
+    /// Filter results by Java package pattern (glob with `*`/`?` wildcards, e.g. `"com.google.common.*"`).
     pub package: Option<&'a str>,
 }
 
@@ -46,8 +48,6 @@ impl<'a> SearchQuery<'a> {
         Self {
             query: Some(query),
             symbol_types: &[],
-            fqn_mode: false,
-            regex_mode: false,
             limit: 20,
             offset: 0,
             dependency: None,
@@ -195,9 +195,9 @@ pub struct CleanOutput {
 /// Structured output for the `pkgs` command.
 #[derive(Debug, Serialize)]
 pub struct PkgsOutput {
-    /// Filter pattern applied (if any).
+    /// Glob query pattern applied (if any).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub filter: Option<String>,
+    pub query: Option<String>,
     /// GAV pattern used to restrict to specific dependencies.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependency: Option<String>,
@@ -228,9 +228,9 @@ pub struct PkgInfo {
 /// Structured output for the `deps` command.
 #[derive(Debug, Serialize)]
 pub struct DepsOutput {
-    /// Filter pattern applied (if any).
+    /// Glob query pattern applied (if any).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub filter: Option<String>,
+    pub query: Option<String>,
     /// Total number of dependencies matching the filter.
     pub total_count: usize,
     /// Offset used for this page of results.

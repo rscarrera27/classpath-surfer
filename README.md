@@ -76,8 +76,8 @@ classpath-surfer search launch --type method --dependency "org.jetbrains.kotlinx
 # List all symbols in a specific dependency
 classpath-surfer search --dependency "com.google.guava:guava"
 
-# Regex search for HTTP client classes
-classpath-surfer search "Http.*Client" --regex --type class
+# Glob search for HTTP client classes
+classpath-surfer search "Http*Client" --type class
 
 # Filter by configuration scope
 classpath-surfer search Annotation --type class --scope compileClasspath
@@ -110,7 +110,7 @@ If a `-sources.jar` is available it will be used; otherwise the class is decompi
 classpath-surfer deps
 
 # Filter by GAV pattern
-classpath-surfer deps --filter "io.netty:*"
+classpath-surfer deps "io.netty:*"
 
 # Show only runtime dependencies
 classpath-surfer deps --scope runtimeClasspath

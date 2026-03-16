@@ -7,12 +7,12 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::index::reader::IndexReader;
-use crate::model::{PkgInfo, PkgsOutput, matches_gav_pattern};
+use crate::model::{PkgInfo, PkgsOutput, matches_glob_pattern};
 
 /// List indexed packages, optionally filtered by a glob pattern and/or dependency.
 pub fn run(
     project_dir: &Path,
-    filter: Option<&str>,
+    query: Option<&str>,
     dependency: Option<&str>,
     limit: usize,
     offset: usize,
@@ -29,10 +29,10 @@ pub fn run(
         (reader.list_packages()?, None)
     };
 
-    let filtered: Vec<&(String, usize)> = if let Some(pattern) = filter {
+    let filtered: Vec<&(String, usize)> = if let Some(pattern) = query {
         all_pkgs
             .iter()
-            .filter(|(pkg, _)| matches_gav_pattern(pkg, pattern))
+            .filter(|(pkg, _)| matches_glob_pattern(pkg, pattern))
             .collect()
     } else {
         all_pkgs.iter().collect()
@@ -52,7 +52,7 @@ pub fn run(
     let has_more = offset + page.len() < total_count;
 
     Ok(PkgsOutput {
-        filter: filter.map(|s| s.to_string()),
+        query: query.map(|s| s.to_string()),
         dependency: dependency.map(|s| s.to_string()),
         matched_gavs,
         total_count,

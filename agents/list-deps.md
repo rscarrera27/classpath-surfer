@@ -11,7 +11,7 @@ maxTurns: 5
 
 ## Filter options
 
-- `--filter <GAV>` — filter dependencies by GAV pattern (glob supported, e.g., `"com.google.*:*"`)
+- Positional query — filter dependencies by GAV pattern (glob with `*`/`?`, e.g., `deps 'com.google.*:*'`)
 - `--scope compileClasspath` or `--scope runtimeClasspath` — filter by configuration scope
 - `--limit N` — maximum number of results (default: 50)
 - `--offset N` — skip results for pagination

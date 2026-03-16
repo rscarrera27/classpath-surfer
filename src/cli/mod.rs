@@ -24,7 +24,7 @@ pub mod init;
 pub mod refresh;
 /// Plain-text renderers for non-TTY output.
 pub mod render;
-/// Symbol search with text, FQN, and regex modes.
+/// Symbol search with smart text and glob pattern modes.
 pub mod search;
 /// Source code display from source JARs or decompilation.
 pub mod show;
@@ -78,9 +78,9 @@ fn check_staleness(project_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Test whether a GAV string matches a glob-like pattern.
+/// Test whether a string matches a glob pattern.
 ///
-/// Delegates to [`crate::model::matches_gav_pattern`].
-pub fn matches_gav_pattern(gav: &str, pattern: &str) -> bool {
-    crate::model::matches_gav_pattern(gav, pattern)
+/// Delegates to [`crate::model::matches_glob_pattern`].
+pub fn matches_glob_pattern(text: &str, pattern: &str) -> bool {
+    crate::model::matches_glob_pattern(text, pattern)
 }

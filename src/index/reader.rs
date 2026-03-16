@@ -10,7 +10,7 @@ use tantivy::{Index, ReloadPolicy};
 use crate::error::CliError;
 use crate::model::{
     AccessLevel, SearchQuery, SearchResult, SignatureDisplay, SourceLanguage, SymbolKind,
-    matches_gav_pattern,
+    glob_to_tantivy_regex, matches_glob_pattern,
 };
 
 /// Result of GAV filter construction: the Tantivy query clause (if any) and matched GAVs.
@@ -78,21 +78,19 @@ impl IndexReader {
 
     /// Search the symbol index and return ranked results.
     ///
-    /// When `query` is `Some`, supports three search modes:
+    /// Search mode is auto-detected from the query string:
     ///
-    /// - **Smart search** (default) -- auto-detects FQN queries (2+ dots) for exact
-    ///   match, otherwise token search on `simple_name` and `name_parts` with AND
-    ///   semantics for multi-word queries.
-    /// - **FQN mode** (`fqn_mode = true`) -- exact match on the `fqn` field.
-    /// - **Regex mode** (`regex_mode = true`) -- regex pattern matched against
-    ///   `simple_name`.
+    /// - **Glob on FQN** — glob chars (`*`/`?`) + 2+ dots → regex on `fqn`.
+    /// - **Glob on simple name** — glob chars, < 2 dots → regex on `simple_name`.
+    /// - **FQN exact** — 2+ dots, no glob chars → `TermQuery` on `fqn`.
+    /// - **Smart search** — everything else → token search on `simple_name` +
+    ///   `name_parts` with AND semantics and prefix matching.
     ///
     /// When `query` is `None`, all symbols are returned (requires `dependency`).
     /// Results without a text query are sorted by kind then FQN.
     ///
-    /// Results can be narrowed by `symbol_type` (comma-separated kinds like
-    /// `"class,method"`, or `"any"` for all), by a `dependency` GAV pattern
-    /// (glob with `*` wildcards), and by access level.
+    /// Results can be narrowed by symbol type, a `dependency` GAV pattern
+    /// (glob with `*`/`?`), access level, package pattern, and scope.
     ///
     /// Returns `(results, total_count, matched_gavs)` where `matched_gavs` is
     /// `Some` when a `dependency` pattern was provided.
@@ -225,11 +223,11 @@ impl IndexReader {
     /// pattern matches zero GAVs (caller should short-circuit with no results).
     fn build_gav_filter(&self, schema: &Schema, dep: &str) -> Result<GavFilter> {
         let gav_field = schema.get_field("gav").unwrap();
-        if dep.contains('*') {
+        if dep.contains('*') || dep.contains('?') {
             let all_gavs = self.list_gavs()?;
             let matching: Vec<String> = all_gavs
                 .iter()
-                .filter(|(g, _)| matches_gav_pattern(g, dep))
+                .filter(|(g, _)| matches_glob_pattern(g, dep))
                 .map(|(g, _)| g.clone())
                 .collect();
             if matching.is_empty() {
@@ -269,7 +267,7 @@ impl IndexReader {
         pattern: &str,
     ) -> Result<Option<Box<dyn tantivy::query::Query>>> {
         let pkg_field = schema.get_field("package").unwrap();
-        if pattern.contains('*') {
+        if pattern.contains('*') || pattern.contains('?') {
             let searcher = self.reader.searcher();
             let mut pkg_set: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
             for segment_reader in searcher.segment_readers() {
@@ -278,7 +276,7 @@ impl IndexReader {
                 while term_stream.advance() {
                     let term_bytes = term_stream.key();
                     if let Ok(term_str) = std::str::from_utf8(term_bytes)
-                        && matches_gav_pattern(term_str, pattern)
+                        && matches_glob_pattern(term_str, pattern)
                     {
                         pkg_set.insert(term_str.to_string());
                     }
@@ -413,6 +411,16 @@ impl IndexReader {
 }
 
 /// Classify the search mode and build the base Tantivy query.
+///
+/// Search mode classification (auto-detected from query string):
+/// 1. **Glob on FQN** — query has glob chars (`*`/`?`) and 2+ dots →
+///    `RegexQuery` on `fqn` field (case-sensitive).
+/// 2. **Glob on simple name** — query has glob chars but fewer than 2 dots →
+///    `RegexQuery` on `simple_name` field (lowercased).
+/// 3. **FQN exact match** — query has 2+ dots, no glob chars →
+///    `TermQuery` on `fqn` field.
+/// 4. **Smart token search** — everything else → token search on
+///    `simple_name` + `name_parts` with prefix matching.
 fn build_base_query(
     index: &Index,
     schema: &Schema,
@@ -422,24 +430,29 @@ fn build_base_query(
         return Ok(Box::new(AllQuery));
     };
 
-    if sq.fqn_mode {
+    let has_glob = query_str.contains('*') || query_str.contains('?');
+    let dot_count = query_str.chars().filter(|&c| c == '.').count();
+
+    if has_glob && dot_count >= 2 {
+        // Glob on FQN (case-sensitive)
         let fqn_field = schema.get_field("fqn").unwrap();
-        return Ok(Box::new(TermQuery::new(
-            tantivy::Term::from_field_text(fqn_field, query_str),
-            IndexRecordOption::Basic,
-        )));
+        return Ok(Box::new(RegexQuery::from_pattern(
+            &glob_to_tantivy_regex(query_str),
+            fqn_field,
+        )?));
     }
 
-    if sq.regex_mode {
+    if has_glob {
+        // Glob on simple_name (lowercase)
         let simple_name_field = schema.get_field("simple_name").unwrap();
         return Ok(Box::new(RegexQuery::from_pattern(
-            query_str,
+            &glob_to_tantivy_regex(&query_str.to_lowercase()),
             simple_name_field,
         )?));
     }
 
-    // Auto-detect FQN (2+ dots)
-    if query_str.chars().filter(|&c| c == '.').count() >= 2 {
+    // Auto-detect FQN exact match (2+ dots)
+    if dot_count >= 2 {
         let fqn_field = schema.get_field("fqn").unwrap();
         return Ok(Box::new(TermQuery::new(
             tantivy::Term::from_field_text(fqn_field, query_str),

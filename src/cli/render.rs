@@ -199,8 +199,8 @@ pub fn clean(output: &CleanOutput) {
 /// Columns: `GAV\tSYMBOL_COUNT\tSCOPE`
 pub fn deps(output: &DepsOutput) {
     if output.dependencies.is_empty() {
-        if let Some(ref filter) = output.filter {
-            println!("No dependencies matching '{filter}'.");
+        if let Some(ref q) = output.query {
+            println!("No dependencies matching '{q}'.");
         } else {
             println!("No dependencies found.");
         }
@@ -231,9 +231,9 @@ pub fn deps(output: &DepsOutput) {
 /// Columns: `PACKAGE\tSYMBOL_COUNT`
 pub fn pkgs(output: &PkgsOutput) {
     if output.packages.is_empty() {
-        match (&output.filter, &output.dependency) {
-            (Some(f), Some(d)) => println!("No packages matching '{f}' in dependency '{d}'."),
-            (Some(f), None) => println!("No packages matching '{f}'."),
+        match (&output.query, &output.dependency) {
+            (Some(q), Some(d)) => println!("No packages matching '{q}' in dependency '{d}'."),
+            (Some(q), None) => println!("No packages matching '{q}'."),
             (None, Some(d)) => println!("No packages found in dependency '{d}'."),
             (None, None) => println!("No packages found."),
         }

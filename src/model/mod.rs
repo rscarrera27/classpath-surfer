@@ -176,25 +176,39 @@ impl SourceOrigin {
     }
 }
 
-/// Test whether a GAV string matches a glob-like pattern.
+/// Test whether a string matches a glob pattern.
 ///
-/// `*` is treated as a wildcard matching any sequence of characters;
-/// all other characters are matched literally (case-sensitive).
+/// `*` matches any sequence of characters; `?` matches exactly one character.
+/// All other characters are matched literally (case-sensitive).
 ///
 /// # Examples
 ///
 /// ```
-/// use classpath_surfer::model::matches_gav_pattern;
-/// assert!(matches_gav_pattern("com.google.guava:guava:33.0-jre", "com.google.*:*"));
-/// assert!(matches_gav_pattern("io.netty:netty-all:4.1", "*:netty-*:*"));
-/// assert!(!matches_gav_pattern("io.netty:netty-all:4.1", "com.google.*:*"));
+/// use classpath_surfer::model::matches_glob_pattern;
+/// assert!(matches_glob_pattern("com.google.guava:guava:33.0-jre", "com.google.*:*"));
+/// assert!(matches_glob_pattern("io.netty:netty-all:4.1", "*:netty-*:*"));
+/// assert!(!matches_glob_pattern("io.netty:netty-all:4.1", "com.google.*:*"));
+/// assert!(matches_glob_pattern("com.google.guava:guava:33.0-jre", "com.google.?uava:*"));
 /// ```
-pub fn matches_gav_pattern(gav: &str, pattern: &str) -> bool {
-    let escaped = regex::escape(pattern);
-    let regex_str = format!("^{}$", escaped.replace(r"\*", ".*"));
+pub fn matches_glob_pattern(text: &str, pattern: &str) -> bool {
+    let regex_str = glob_to_regex(pattern);
     regex::Regex::new(&regex_str)
-        .map(|re| re.is_match(gav))
+        .map(|re| re.is_match(text))
         .unwrap_or(false)
+}
+
+/// Convert a glob pattern to an anchored regex string (`^...$`).
+fn glob_to_regex(pattern: &str) -> String {
+    let escaped = regex::escape(pattern);
+    format!("^{}$", escaped.replace(r"\*", ".*").replace(r"\?", "."))
+}
+
+/// Convert a glob pattern to an unanchored regex for Tantivy `RegexQuery`.
+///
+/// Tantivy `RegexQuery` matches against the full term, so anchors are unnecessary.
+pub fn glob_to_tantivy_regex(pattern: &str) -> String {
+    let escaped = regex::escape(pattern);
+    escaped.replace(r"\*", ".*").replace(r"\?", ".")
 }
 
 /// Format a source language string (lowercase) into a capitalized display name.

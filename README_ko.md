@@ -78,7 +78,7 @@ classpath-surfer search launch --type method --dependency "org.jetbrains.kotlinx
 classpath-surfer search --dependency "com.google.guava:guava"
 
 # "HTTP 클라이언트 관련 클래스 전부 보여줘"
-classpath-surfer search "Http.*Client" --regex --type class
+classpath-surfer search "Http*Client" --type class
 
 # "compile에서만 보이는 어노테이션 찾기"
 classpath-surfer search Annotation --type class --scope compileClasspath
@@ -111,7 +111,7 @@ Source JAR가 있으면 원본 소스를, 없으면 CFR/Vineflower로 자동 디
 classpath-surfer deps
 
 # Netty 관련 의존성만 필터
-classpath-surfer deps --filter "io.netty:*"
+classpath-surfer deps "io.netty:*"
 
 # runtime에만 포함된 의존성 확인
 classpath-surfer deps --scope runtimeClasspath

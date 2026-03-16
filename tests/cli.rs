@@ -168,10 +168,10 @@ fn agentic_pkgs_json_output() {
 }
 
 #[test]
-fn agentic_pkgs_filter() {
+fn agentic_pkgs_query() {
     let project = require_indexed_project!();
     let output = common::cli_cmd(&project.project_dir)
-        .args(["pkgs", "--filter", "com.google.*", "--agentic"])
+        .args(["pkgs", "com.google.*", "--agentic"])
         .output()
         .unwrap();
 
@@ -179,7 +179,7 @@ fn agentic_pkgs_filter() {
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("should produce valid JSON");
     assert!(json["total_count"].as_u64().unwrap() > 0);
-    assert_eq!(json["filter"], "com.google.*");
+    assert_eq!(json["query"], "com.google.*");
 }
 
 #[test]

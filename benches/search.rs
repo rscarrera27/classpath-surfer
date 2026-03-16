@@ -105,22 +105,16 @@ fn bench_search(c: &mut Criterion) {
     group.bench_function("fqn", |b| {
         b.iter(|| {
             let _ = reader
-                .search(&SearchQuery {
-                    fqn_mode: true,
-                    ..SearchQuery::simple("com.google.common.collect.ImmutableList")
-                })
+                .search(&SearchQuery::simple(
+                    "com.google.common.collect.ImmutableList",
+                ))
                 .unwrap();
         });
     });
 
-    group.bench_function("regex", |b| {
+    group.bench_function("glob_simple_name", |b| {
         b.iter(|| {
-            let _ = reader
-                .search(&SearchQuery {
-                    regex_mode: true,
-                    ..SearchQuery::simple("Immutable.*")
-                })
-                .unwrap();
+            let _ = reader.search(&SearchQuery::simple("Immutable*")).unwrap();
         });
     });
 
