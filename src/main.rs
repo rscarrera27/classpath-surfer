@@ -8,6 +8,7 @@ use classpath_surfer::error::CliError;
 use classpath_surfer::model::{AccessLevel, SearchQuery, SymbolKind};
 use classpath_surfer::output::{self, OutputMode};
 use classpath_surfer::source::decompiler::Decompiler;
+use classpath_surfer::tui::search::{BrowserConfig, ColumnFocus};
 
 /// Build a long version string including the git SHA.
 fn long_version() -> &'static str {
@@ -355,18 +356,19 @@ fn main() {
                 let effective_limit = pagination.effective_limit(output_mode);
 
                 if output_mode == OutputMode::Tui {
-                    let sq = SearchQuery {
-                        query: query.as_deref(),
-                        symbol_types: &r#type,
-                        limit: effective_limit,
-                        dependency: dep_filter.dependency.as_deref(),
-                        access_levels: &access_levels,
-                        offset: 0,
-                        classpath: classpath_filter.classpath.as_deref(),
-                        package: package.as_deref(),
-                    };
                     cli::require_index(&project_dir).and_then(|()| {
-                        classpath_surfer::tui::search::run_interactive(&project_dir, &sq)
+                        classpath_surfer::tui::search::run(
+                            &project_dir,
+                            &BrowserConfig {
+                                initial_focus: ColumnFocus::Symbol,
+                                dep_query: dep_filter.dependency.as_deref(),
+                                pkg_query: package.as_deref(),
+                                symbol_query: query.as_deref(),
+                                classpath: classpath_filter.classpath.as_deref(),
+                                symbol_types: &r#type,
+                                access_levels: &access_levels,
+                            },
+                        )
                     })
                 } else {
                     let sq = SearchQuery {
@@ -400,10 +402,14 @@ fn main() {
                 let effective_limit = pagination.effective_limit(output_mode);
                 if output_mode == OutputMode::Tui {
                     cli::require_index(&project_dir).and_then(|()| {
-                        classpath_surfer::tui::deps::run(
+                        classpath_surfer::tui::search::run(
                             &project_dir,
-                            query.as_deref(),
-                            classpath_filter.classpath.as_deref(),
+                            &BrowserConfig {
+                                initial_focus: ColumnFocus::Dep,
+                                dep_query: query.as_deref(),
+                                classpath: classpath_filter.classpath.as_deref(),
+                                ..Default::default()
+                            },
                         )
                     })
                 } else {
@@ -428,19 +434,34 @@ fn main() {
                 dep_filter,
             } => {
                 let effective_limit = pagination.effective_limit(output_mode);
-                render(
-                    output_mode,
-                    cli::pkgs::run(
-                        &project_dir,
-                        query.as_deref(),
-                        dep_filter.dependency.as_deref(),
-                        classpath_filter.classpath.as_deref(),
-                        effective_limit,
-                        pagination.offset,
-                    ),
-                    cli::render::pkgs,
-                    None::<fn(&_) -> anyhow::Result<()>>,
-                )
+                if output_mode == OutputMode::Tui {
+                    cli::require_index(&project_dir).and_then(|()| {
+                        classpath_surfer::tui::search::run(
+                            &project_dir,
+                            &BrowserConfig {
+                                initial_focus: ColumnFocus::Pkg,
+                                dep_query: dep_filter.dependency.as_deref(),
+                                pkg_query: query.as_deref(),
+                                classpath: classpath_filter.classpath.as_deref(),
+                                ..Default::default()
+                            },
+                        )
+                    })
+                } else {
+                    render(
+                        output_mode,
+                        cli::pkgs::run(
+                            &project_dir,
+                            query.as_deref(),
+                            dep_filter.dependency.as_deref(),
+                            classpath_filter.classpath.as_deref(),
+                            effective_limit,
+                            pagination.offset,
+                        ),
+                        cli::render::pkgs,
+                        None::<fn(&_) -> anyhow::Result<()>>,
+                    )
+                }
             }
         },
         Commands::Show {

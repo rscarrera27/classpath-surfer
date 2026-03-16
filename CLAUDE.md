@@ -108,7 +108,12 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps  # 문서 빌드 검증
 - `skills/` — Claude Code 스킬 정의 (`find-symbol`, `show-source`, `list-deps`, `manage-index`)
 - `src/source/decompiler.rs` — `Decompiler` enum (`Cfr`/`Vineflower`) 및 디컴파일 실행
 - `src/staleness/` — 인덱스 변경 감지 (lockfile, buildfile)
-- `src/tui/` — ratatui 기반 인터랙티브 TUI 렌더러 (search, show, status)
+- `src/tui/` — ratatui 기반 인터랙티브 TUI 렌더러
+- `src/tui/search/` — 통합 3컬럼 브라우저 (Deps → Packages → Symbols Miller columns)
+- `src/tui/search/mod.rs` — `BrowserConfig`, `ColumnFocus`, `run()` 진입점
+- `src/tui/search/browser.rs` — 브라우저 이벤트 루프, 레이아웃, 상태 관리
+- `src/tui/show.rs` — 소스 코드 풀스크린 뷰어 (독립 실행 + 브라우저 오버레이)
+- `src/tui/highlight.rs` — syntect 기반 구문 강조 인프라
 - `tests/common/mod.rs` — 테스트 공유 인프라 (LazyLock 공유 인덱스, 헬퍼, 매크로)
 - `tests/unit.rs` — JDK 불필요 유닛 테스트
 - `tests/integration.rs` — 공유 인덱스 기반 읽기 전용 인테그레이션 테스트
