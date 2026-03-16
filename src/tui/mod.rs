@@ -54,3 +54,26 @@ pub fn wait_for_quit() -> Result<()> {
         }
     }
 }
+
+/// Render "..." overflow indicators when a bordered table has hidden rows above or below the viewport.
+///
+/// `area` is the outer area (including borders). `offset` is the first visible row index
+/// (from `TableState::offset()`). `total_rows` is the total number of data rows.
+pub fn render_overflow_indicators(frame: &mut Frame, area: Rect, offset: usize, total_rows: usize) {
+    let inner = area.inner(Margin::new(1, 1));
+    if inner.height == 0 || total_rows == 0 {
+        return;
+    }
+    let visible_height = inner.height as usize;
+    let dim = Style::default().fg(Color::DarkGray);
+
+    if offset > 0 {
+        let rect = Rect::new(inner.x, inner.y, inner.width, 1);
+        frame.render_widget(Line::from("   ...").style(dim), rect);
+    }
+
+    if total_rows > offset + visible_height {
+        let rect = Rect::new(inner.x, inner.y + inner.height - 1, inner.width, 1);
+        frame.render_widget(Line::from("   ...").style(dim), rect);
+    }
+}

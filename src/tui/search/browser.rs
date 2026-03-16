@@ -86,8 +86,58 @@ pub fn run(project_dir: &Path, config: &BrowserConfig) -> Result<()> {
         })
         .collect();
 
+    // When pkg_query is set, filter deps to only those with at least one matching package.
+    // Without this, the first dep might have no matching packages, leaving the Packages
+    // column empty even though other deps do have matches (the agentic mode aggregates
+    // packages across all deps, but the Miller-columns TUI loads per-dep).
+    let deps = if let Some(pattern) = config.pkg_query {
+        deps.into_iter()
+            .filter(|dep| {
+                reader
+                    .list_packages_for_dependency(&dep.gav)
+                    .map(|(pkgs, _)| {
+                        pkgs.iter()
+                            .any(|(pkg, _)| cli::matches_glob_pattern(pkg, pattern))
+                    })
+                    .unwrap_or(false)
+            })
+            .collect()
+    } else {
+        deps
+    };
+
+    // When symbol_query is set, further filter deps to those with at least one matching
+    // symbol. Same rationale: agentic mode searches the entire index, but the TUI searches
+    // per-dep, so the first dep may have zero matches.
+    let deps = if let Some(query) = config.symbol_query {
+        deps.into_iter()
+            .filter(|dep| {
+                let sq = SearchQuery {
+                    query: Some(query),
+                    symbol_types: config.symbol_types,
+                    limit: 1,
+                    offset: 0,
+                    dependency: Some(&dep.gav),
+                    access_levels: config.access_levels,
+                    classpath: config.classpath,
+                    package: config.pkg_query,
+                };
+                reader
+                    .search(&sq)
+                    .map(|(_, total, _)| total > 0)
+                    .unwrap_or(false)
+            })
+            .collect()
+    } else {
+        deps
+    };
+
     if deps.is_empty() {
-        if let Some(pattern) = config.dep_query {
+        if let Some(query) = config.symbol_query {
+            eprintln!("No symbols matching '{query}'.");
+        } else if let Some(pattern) = config.pkg_query {
+            eprintln!("No packages matching '{pattern}'.");
+        } else if let Some(pattern) = config.dep_query {
             eprintln!("No dependencies matching '{pattern}'.");
         } else {
             eprintln!("No dependencies found.");
@@ -99,10 +149,15 @@ pub fn run(project_dir: &Path, config: &BrowserConfig) -> Result<()> {
     let app_config = Config::load(project_dir).unwrap_or_default();
     let manifest: Option<ClasspathManifest> = cli::show::load_manifest(&manifest_path).ok();
 
+    let has_all_entry = config.initial_focus != ColumnFocus::Dep;
+    let has_all_pkg_entry = config.initial_focus == ColumnFocus::Symbol;
+
     let mut state = BrowserState {
         focus: config.initial_focus,
+        has_all_entry,
         deps,
         dep_state: TableState::default().with_selected(Some(0)),
+        has_all_pkg_entry,
         packages: Vec::new(),
         pkg_state: TableState::default(),
         symbols: Vec::new(),
@@ -232,7 +287,7 @@ fn move_right(
 ) -> Result<()> {
     match state.focus {
         ColumnFocus::Dep => {
-            if !state.packages.is_empty() {
+            if state.pkg_row_count() > 0 {
                 state.focus = ColumnFocus::Pkg;
                 if state.pkg_state.selected().is_none() {
                     state.pkg_state.select(Some(0));
@@ -264,7 +319,7 @@ fn navigate_down(
     match state.focus {
         ColumnFocus::Dep => {
             let i = state.dep_state.selected().unwrap_or(0);
-            if i < state.deps.len().saturating_sub(1) {
+            if i < state.dep_row_count().saturating_sub(1) {
                 state.dep_state.select(Some(i + 1));
                 load_packages(reader, state, config)?;
                 load_symbols(reader, state, config)?;
@@ -272,7 +327,7 @@ fn navigate_down(
         }
         ColumnFocus::Pkg => {
             let i = state.pkg_state.selected().unwrap_or(0);
-            if i < state.packages.len().saturating_sub(1) {
+            if i < state.pkg_row_count().saturating_sub(1) {
                 state.pkg_state.select(Some(i + 1));
                 load_symbols(reader, state, config)?;
             }
@@ -328,20 +383,46 @@ fn navigate_up(
 
 // --- Data loading ---
 
-/// Load packages for the currently selected dep.
+/// Load packages for the currently selected dep (or all deps if "(All)").
 fn load_packages(
     reader: &IndexReader,
     state: &mut BrowserState,
     config: &BrowserConfig,
 ) -> Result<()> {
-    let dep_idx = state.dep_state.selected().unwrap_or(0);
-    let selected_gav = &state.deps[dep_idx].gav;
-
-    let (mut pkgs, _) = reader.list_packages_for_dependency(selected_gav)?;
+    let mut pkgs = if state.is_all_selected() {
+        let gav_refs: Vec<&str> = state.deps.iter().map(|d| d.gav.as_str()).collect();
+        let (pkgs, _) = reader.list_packages_for_gavs(&gav_refs)?;
+        pkgs
+    } else {
+        let selected_gav = state.selected_dep_gav().unwrap();
+        let (pkgs, _) = reader.list_packages_for_dependency(selected_gav)?;
+        pkgs
+    };
 
     // Apply pkg_query filter
     if let Some(pattern) = config.pkg_query {
         pkgs.retain(|(pkg, _)| cli::matches_glob_pattern(pkg, pattern));
+    }
+
+    // Apply symbol_query filter: only keep packages that have matching symbols
+    if let Some(query) = config.symbol_query {
+        let dependency = state.selected_dep_gav();
+        pkgs.retain(|(pkg, _)| {
+            let sq = SearchQuery {
+                query: Some(query),
+                symbol_types: config.symbol_types,
+                limit: 1,
+                offset: 0,
+                dependency,
+                access_levels: config.access_levels,
+                classpath: config.classpath,
+                package: Some(pkg),
+            };
+            reader
+                .search(&sq)
+                .map(|(_, total, _)| total > 0)
+                .unwrap_or(false)
+        });
     }
 
     state.packages = pkgs
@@ -352,11 +433,12 @@ fn load_packages(
         })
         .collect();
 
-    // Reset pkg selection to first if packages changed
-    if state.packages.is_empty() {
+    // Reset pkg selection
+    let pkg_rows = state.pkg_row_count();
+    if pkg_rows == 0 {
         state.pkg_state = TableState::default();
     } else if state.pkg_state.selected().is_none()
-        || state.pkg_state.selected().unwrap_or(0) >= state.packages.len()
+        || state.pkg_state.selected().unwrap_or(0) >= pkg_rows
     {
         state.pkg_state.select(Some(0));
     }
@@ -370,27 +452,21 @@ fn load_packages(
     Ok(())
 }
 
-/// Load symbols for the currently selected dep+pkg.
+/// Load symbols for the currently selected dep+pkg (or all if "(All)").
 fn load_symbols(
     reader: &IndexReader,
     state: &mut BrowserState,
     config: &BrowserConfig,
 ) -> Result<()> {
-    let dep_idx = state.dep_state.selected().unwrap_or(0);
-    let selected_gav = &state.deps[dep_idx].gav;
-
-    let pkg = state
-        .pkg_state
-        .selected()
-        .and_then(|i| state.packages.get(i))
-        .map(|p| p.package.as_str());
+    let dependency = state.selected_dep_gav();
+    let pkg = state.selected_pkg_name();
 
     let sq = SearchQuery {
         query: config.symbol_query,
         symbol_types: config.symbol_types,
         limit: SYMBOL_PAGE_SIZE,
         offset: 0,
-        dependency: Some(selected_gav),
+        dependency,
         access_levels: config.access_levels,
         classpath: config.classpath,
         package: pkg,
@@ -421,21 +497,15 @@ fn load_more_symbols(
         return Ok(());
     }
 
-    let dep_idx = state.dep_state.selected().unwrap_or(0);
-    let selected_gav = &state.deps[dep_idx].gav;
-
-    let pkg = state
-        .pkg_state
-        .selected()
-        .and_then(|i| state.packages.get(i))
-        .map(|p| p.package.as_str());
+    let dependency = state.selected_dep_gav();
+    let pkg = state.selected_pkg_name();
 
     let sq = SearchQuery {
         query: config.symbol_query,
         symbol_types: config.symbol_types,
         limit: SYMBOL_PAGE_SIZE,
         offset: state.symbols.len(),
-        dependency: Some(selected_gav),
+        dependency,
         access_levels: config.access_levels,
         classpath: config.classpath,
         package: pkg,
@@ -482,10 +552,14 @@ struct BrowserState {
     focus: ColumnFocus,
 
     // Deps column
+    /// When true, a synthetic "(All)" row is shown at index 0 of the deps column.
+    has_all_entry: bool,
     deps: Vec<DepInfo>,
     dep_state: TableState,
 
     // Packages column
+    /// When true, a synthetic "(All)" row is shown at index 0 of the packages column.
+    has_all_pkg_entry: bool,
     packages: Vec<PkgInfo>,
     pkg_state: TableState,
 
@@ -498,6 +572,70 @@ struct BrowserState {
     // Show overlay
     show_state: Option<ShowViewState>,
     error_message: Option<String>,
+}
+
+impl BrowserState {
+    /// Total number of rows in the deps column (including "(All)" if present).
+    fn dep_row_count(&self) -> usize {
+        self.deps.len() + usize::from(self.has_all_entry)
+    }
+
+    /// Whether the "(All)" entry is currently selected.
+    fn is_all_selected(&self) -> bool {
+        self.has_all_entry && self.dep_state.selected() == Some(0)
+    }
+
+    /// GAV of the currently selected dep, or `None` if "(All)" is selected.
+    fn selected_dep_gav(&self) -> Option<&str> {
+        let idx = self.dep_state.selected().unwrap_or(0);
+        if self.has_all_entry {
+            if idx == 0 {
+                None
+            } else {
+                self.deps.get(idx - 1).map(|d| d.gav.as_str())
+            }
+        } else {
+            self.deps.get(idx).map(|d| d.gav.as_str())
+        }
+    }
+
+    /// `DepInfo` for the currently selected dep, or `None` if "(All)".
+    fn selected_dep(&self) -> Option<&DepInfo> {
+        let idx = self.dep_state.selected().unwrap_or(0);
+        if self.has_all_entry {
+            if idx == 0 {
+                None
+            } else {
+                self.deps.get(idx - 1)
+            }
+        } else {
+            self.deps.get(idx)
+        }
+    }
+
+    /// Total number of rows in the packages column (including "(All)" if present).
+    fn pkg_row_count(&self) -> usize {
+        self.packages.len() + usize::from(self.has_all_pkg_entry)
+    }
+
+    /// Whether the "(All)" package entry is currently selected.
+    fn is_all_pkg_selected(&self) -> bool {
+        self.has_all_pkg_entry && self.pkg_state.selected() == Some(0)
+    }
+
+    /// Package name for the currently selected package, or `None` if "(All)".
+    fn selected_pkg_name(&self) -> Option<&str> {
+        let idx = self.pkg_state.selected()?;
+        if self.has_all_pkg_entry {
+            if idx == 0 {
+                None
+            } else {
+                self.packages.get(idx - 1).map(|p| p.package.as_str())
+            }
+        } else {
+            self.packages.get(idx).map(|p| p.package.as_str())
+        }
+    }
 }
 
 /// State for the show source overlay.
@@ -628,23 +766,37 @@ fn render_deps_column(
         format!(" Deps ({}) ", state.deps.len())
     };
 
-    let rows: Vec<Row> = state
-        .deps
-        .iter()
-        .enumerate()
-        .map(|(i, dep)| {
-            let selected_marker =
-                if state.dep_state.selected() == Some(i) && state.focus != ColumnFocus::Dep {
-                    ">"
-                } else {
-                    " "
-                };
-            Row::new(vec![
-                Cell::from(format!("{selected_marker} {}", dep.gav)),
-                Cell::from(dep.symbol_count.to_string()),
-            ])
-        })
-        .collect();
+    let all_row = if state.has_all_entry {
+        let total_symbols: usize = state.deps.iter().map(|d| d.symbol_count).sum();
+        let selected_marker =
+            if state.dep_state.selected() == Some(0) && state.focus != ColumnFocus::Dep {
+                ">"
+            } else {
+                " "
+            };
+        Some(Row::new(vec![
+            Cell::from(format!("{selected_marker} (All)")),
+            Cell::from(total_symbols.to_string()),
+        ]))
+    } else {
+        None
+    };
+
+    let dep_rows = state.deps.iter().enumerate().map(|(i, dep)| {
+        let display_idx = if state.has_all_entry { i + 1 } else { i };
+        let selected_marker =
+            if state.dep_state.selected() == Some(display_idx) && state.focus != ColumnFocus::Dep {
+                ">"
+            } else {
+                " "
+            };
+        Row::new(vec![
+            Cell::from(format!("{selected_marker} {}", dep.gav)),
+            Cell::from(dep.symbol_count.to_string()),
+        ])
+    });
+
+    let rows: Vec<Row> = all_row.into_iter().chain(dep_rows).collect();
 
     let widths = [Constraint::Fill(1), Constraint::Length(7)];
     let border_style = if is_focused {
@@ -668,6 +820,12 @@ fn render_deps_column(
         .highlight_symbol(">> ");
 
     frame.render_stateful_widget(table, area, &mut state.dep_state);
+    crate::tui::render_overflow_indicators(
+        frame,
+        area,
+        state.dep_state.offset(),
+        state.dep_row_count(),
+    );
 }
 
 /// Render the packages column.
@@ -685,23 +843,37 @@ fn render_pkgs_column(
         format!(" Packages ({}) ", state.packages.len())
     };
 
-    let rows: Vec<Row> = state
-        .packages
-        .iter()
-        .enumerate()
-        .map(|(i, pkg)| {
-            let selected_marker =
-                if state.pkg_state.selected() == Some(i) && state.focus != ColumnFocus::Pkg {
-                    ">"
-                } else {
-                    " "
-                };
-            Row::new(vec![
-                Cell::from(format!("{selected_marker} {}", pkg.package)),
-                Cell::from(pkg.symbol_count.to_string()),
-            ])
-        })
-        .collect();
+    let all_pkg_row = if state.has_all_pkg_entry {
+        let total_symbols: usize = state.packages.iter().map(|p| p.symbol_count).sum();
+        let selected_marker =
+            if state.pkg_state.selected() == Some(0) && state.focus != ColumnFocus::Pkg {
+                ">"
+            } else {
+                " "
+            };
+        Some(Row::new(vec![
+            Cell::from(format!("{selected_marker} (All)")),
+            Cell::from(total_symbols.to_string()),
+        ]))
+    } else {
+        None
+    };
+
+    let pkg_rows = state.packages.iter().enumerate().map(|(i, pkg)| {
+        let display_idx = if state.has_all_pkg_entry { i + 1 } else { i };
+        let selected_marker =
+            if state.pkg_state.selected() == Some(display_idx) && state.focus != ColumnFocus::Pkg {
+                ">"
+            } else {
+                " "
+            };
+        Row::new(vec![
+            Cell::from(format!("{selected_marker} {}", pkg.package)),
+            Cell::from(pkg.symbol_count.to_string()),
+        ])
+    });
+
+    let rows: Vec<Row> = all_pkg_row.into_iter().chain(pkg_rows).collect();
 
     let widths = [Constraint::Fill(1), Constraint::Length(7)];
     let border_style = if is_focused {
@@ -725,6 +897,12 @@ fn render_pkgs_column(
         .highlight_symbol(">> ");
 
     frame.render_stateful_widget(table, area, &mut state.pkg_state);
+    crate::tui::render_overflow_indicators(
+        frame,
+        area,
+        state.pkg_state.offset(),
+        state.pkg_row_count(),
+    );
 }
 
 /// Render the symbols column.
@@ -799,6 +977,12 @@ fn render_symbols_column(
         .highlight_symbol(">> ");
 
     frame.render_stateful_widget(table, area, &mut state.symbol_state);
+    crate::tui::render_overflow_indicators(
+        frame,
+        area,
+        state.symbol_state.offset(),
+        state.symbols.len(),
+    );
 }
 
 /// Build detail lines for the currently focused item.
@@ -807,8 +991,20 @@ fn build_detail_lines(state: &BrowserState) -> Vec<Line<'static>> {
 
     match state.focus {
         ColumnFocus::Dep => {
-            let dep_idx = state.dep_state.selected().unwrap_or(0);
-            if let Some(dep) = state.deps.get(dep_idx) {
+            if state.is_all_selected() {
+                let total_symbols: usize = state.deps.iter().map(|d| d.symbol_count).sum();
+                vec![
+                    Line::from(Span::styled("(All dependencies)", Style::default().bold())),
+                    Line::from(vec![
+                        Span::styled("Dependencies: ", label_style),
+                        Span::raw(state.deps.len().to_string()),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Symbols: ", label_style),
+                        Span::raw(total_symbols.to_string()),
+                    ]),
+                ]
+            } else if let Some(dep) = state.selected_dep() {
                 let mut lines = vec![Line::from(Span::styled(
                     dep.gav.clone(),
                     Style::default().bold(),
@@ -829,13 +1025,31 @@ fn build_detail_lines(state: &BrowserState) -> Vec<Line<'static>> {
             }
         }
         ColumnFocus::Pkg => {
-            let pkg_idx = state.pkg_state.selected().unwrap_or(0);
-            if let Some(pkg) = state.packages.get(pkg_idx) {
+            if state.is_all_pkg_selected() {
+                let total_symbols: usize = state.packages.iter().map(|p| p.symbol_count).sum();
                 vec![
-                    Line::from(Span::styled(pkg.package.clone(), Style::default().bold())),
+                    Line::from(Span::styled("(All packages)", Style::default().bold())),
+                    Line::from(vec![
+                        Span::styled("Packages: ", label_style),
+                        Span::raw(state.packages.len().to_string()),
+                    ]),
                     Line::from(vec![
                         Span::styled("Symbols: ", label_style),
-                        Span::raw(pkg.symbol_count.to_string()),
+                        Span::raw(total_symbols.to_string()),
+                    ]),
+                ]
+            } else if let Some(pkg_name) = state.selected_pkg_name() {
+                let symbol_count = state
+                    .packages
+                    .iter()
+                    .find(|p| p.package == pkg_name)
+                    .map(|p| p.symbol_count)
+                    .unwrap_or(0);
+                vec![
+                    Line::from(Span::styled(pkg_name.to_string(), Style::default().bold())),
+                    Line::from(vec![
+                        Span::styled("Symbols: ", label_style),
+                        Span::raw(symbol_count.to_string()),
                     ]),
                 ]
             } else {
@@ -881,20 +1095,19 @@ fn build_detail_lines(state: &BrowserState) -> Vec<Line<'static>> {
 fn detail_line_count(state: &BrowserState) -> usize {
     match state.focus {
         ColumnFocus::Dep => {
-            let dep_idx = state.dep_state.selected().unwrap_or(0);
-            state
-                .deps
-                .get(dep_idx)
-                .map(|dep| if dep.classpaths.is_empty() { 2 } else { 3 })
-                .unwrap_or(0)
+            if state.is_all_selected() {
+                3 // title + dep count + symbol count
+            } else {
+                state
+                    .selected_dep()
+                    .map(|dep| if dep.classpaths.is_empty() { 2 } else { 3 })
+                    .unwrap_or(0)
+            }
         }
         ColumnFocus::Pkg => {
-            if state
-                .pkg_state
-                .selected()
-                .and_then(|i| state.packages.get(i))
-                .is_some()
-            {
+            if state.is_all_pkg_selected() {
+                3 // title + pkg count + symbol count
+            } else if state.selected_pkg_name().is_some() {
                 2
             } else {
                 0
