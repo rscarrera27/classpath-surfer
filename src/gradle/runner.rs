@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -37,6 +37,8 @@ pub fn run_export_task(
     }
 
     let mut child = cmd
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .with_context(|| format!("spawning {gradle_cmd}"))?;
 
@@ -61,14 +63,23 @@ pub fn run_export_task(
         match child.try_wait() {
             Ok(Some(status)) => {
                 if !status.success() {
-                    return Err(CliError::transient(
-                        "GRADLE_FAILED",
-                        format!(
-                            "Gradle task failed with exit code: {}",
-                            status.code().unwrap_or(-1)
-                        ),
-                    )
-                    .into());
+                    let stderr_output = child
+                        .stderr
+                        .take()
+                        .and_then(|mut s| {
+                            let mut buf = String::new();
+                            std::io::Read::read_to_string(&mut s, &mut buf).ok()?;
+                            Some(buf)
+                        })
+                        .unwrap_or_default();
+                    let exit_code = status.code().unwrap_or(-1);
+                    let mut msg = format!("Gradle task failed with exit code: {exit_code}");
+                    let stderr_trimmed = stderr_output.trim();
+                    if !stderr_trimmed.is_empty() {
+                        msg.push_str("\n\nGradle stderr:\n");
+                        msg.push_str(stderr_trimmed);
+                    }
+                    return Err(CliError::transient("GRADLE_FAILED", msg).into());
                 }
                 return Ok(());
             }
