@@ -39,7 +39,7 @@ struct Cli {
     no_color: bool,
 
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 /// Shared pagination arguments for commands that return lists.
@@ -86,9 +86,11 @@ struct DependencyFilter {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Search for symbols, dependencies, or packages in the index
-    #[command(subcommand)]
-    Search(SearchCommands),
+    /// Search for symbols, dependencies, or packages in the index (opens browser in TTY)
+    Search {
+        #[command(subcommand)]
+        subcmd: Option<SearchCommands>,
+    },
 
     /// Show source code for a specific symbol
     #[command(
@@ -323,7 +325,41 @@ fn main() {
     let config = classpath_surfer::config::Config::load(&project_dir).unwrap_or_default();
 
     let result = match cli.command {
-        Commands::Search(search_cmd) => match search_cmd {
+        // No subcommand: open browser in TTY, show help otherwise
+        None => {
+            if output_mode == OutputMode::Tui {
+                cli::require_index(&project_dir).and_then(|()| {
+                    classpath_surfer::tui::search::run(&project_dir, &BrowserConfig::default())
+                })
+            } else {
+                // Re-parse with explicit error to show help
+                use clap::CommandFactory;
+                Cli::command().print_help().ok();
+                eprintln!();
+                std::process::exit(0);
+            }
+        }
+        // `search` with no sub-subcommand: same as bare invocation
+        Some(Commands::Search { subcmd: None }) => {
+            if output_mode == OutputMode::Tui {
+                cli::require_index(&project_dir).and_then(|()| {
+                    classpath_surfer::tui::search::run(&project_dir, &BrowserConfig::default())
+                })
+            } else {
+                use clap::CommandFactory;
+                let mut cmd = Cli::command();
+                if let Some(search_cmd) = cmd.find_subcommand_mut("search") {
+                    search_cmd.print_help().ok();
+                } else {
+                    cmd.print_help().ok();
+                }
+                eprintln!();
+                std::process::exit(0);
+            }
+        }
+        Some(Commands::Search {
+            subcmd: Some(search_cmd),
+        }) => match search_cmd {
             SearchCommands::Symbol {
                 query,
                 r#type,
@@ -464,14 +500,14 @@ fn main() {
                 }
             }
         },
-        Commands::Show {
+        Some(Commands::Show {
             fqn,
             decompiler,
             decompiler_jar,
             no_decompile,
             context,
             full,
-        } => {
+        }) => {
             let effective_decompiler = decompiler.unwrap_or(config.decompiler);
             let effective_jar = decompiler_jar.or(config.decompiler_jar.clone());
             let opts = cli::show::ShowOptions {
@@ -489,7 +525,7 @@ fn main() {
                 Some(|out: &_| classpath_surfer::tui::show::run(out)),
             )
         }
-        Commands::Index(index_cmd) => match index_cmd {
+        Some(Commands::Index(index_cmd)) => match index_cmd {
             IndexCommands::Init => render(
                 output_mode,
                 cli::init::run(&project_dir),
