@@ -198,8 +198,8 @@ pub fn run(project_dir: &Path, config: &BrowserConfig) -> Result<()> {
     let app_config = Config::load(project_dir).unwrap_or_default();
     let manifest: Option<ClasspathManifest> = cli::show::load_manifest(&manifest_path).ok();
 
-    let has_all_entry = config.initial_focus != ColumnFocus::Dep;
-    let has_all_pkg_entry = config.initial_focus == ColumnFocus::Symbol;
+    let has_all_entry = true;
+    let has_all_pkg_entry = true;
 
     let filters = FilterSnapshot {
         symbol_query: config.symbol_query.map(|s| s.to_string()),

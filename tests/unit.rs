@@ -470,3 +470,35 @@ fn search_result_classpaths_serialization() {
     assert_eq!(classpaths[0], "compile");
     assert_eq!(classpaths[1], "runtime");
 }
+
+#[test]
+fn overflow_indicator_first_page() {
+    use ratatui::prelude::*;
+    use ratatui::widgets::{Block, Borders, Cell, Row, Table, TableState};
+
+    // 30 rows, area height 12 → inner height 10
+    let area = Rect::new(0, 0, 40, 12);
+    let inner = area.inner(Margin::new(1, 1));
+    assert_eq!(inner.height, 10, "inner height");
+
+    let rows: Vec<Row> = (0..30)
+        .map(|i| Row::new(vec![Cell::from(format!("row {i}"))]))
+        .collect();
+    let table = Table::new(rows, [Constraint::Fill(1)])
+        .block(Block::default().borders(Borders::ALL))
+        .highlight_symbol(">> ");
+
+    let mut state = TableState::default().with_selected(Some(0));
+    let mut buf = Buffer::empty(area);
+    ratatui::widgets::StatefulWidget::render(&table, area, &mut buf, &mut state);
+
+    let offset = state.offset();
+    let visible_height = inner.height as usize;
+    let total_rows = 30usize;
+
+    eprintln!("offset={offset}, visible_height={visible_height}, total_rows={total_rows}");
+    eprintln!("bottom check: {total_rows} > {offset} + {visible_height} = {}", total_rows > offset + visible_height);
+
+    assert_eq!(offset, 0);
+    assert!(total_rows > offset + visible_height, "bottom indicator should show on first page");
+}
