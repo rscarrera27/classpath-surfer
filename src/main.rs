@@ -70,7 +70,7 @@ impl Pagination {
 /// Shared classpath filter for commands that support classpath restriction.
 #[derive(Args)]
 struct ClasspathFilter {
-    /// Filter by classpath (e.g., compile, runtime)
+    /// Filter by classpath (e.g., compile, runtime, testCompile, testRuntime)
     #[arg(long)]
     classpath: Option<String>,
 }

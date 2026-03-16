@@ -77,9 +77,9 @@ impl ClasspathManifest {
     /// Unlike [`all_dependencies()`](Self::all_dependencies) which deduplicates by GAV,
     /// this method preserves every classpath a GAV appears in.
     ///
-    /// Configuration names like `"compileClasspath"` are normalized by stripping
-    /// the `"Classpath"` suffix, so the returned set contains values like
-    /// `"compile"` and `"runtime"`.
+    /// Configuration names are normalized by stripping the `"Classpath"` suffix,
+    /// so `"compileClasspath"` becomes `"compile"`, `"testRuntimeClasspath"`
+    /// becomes `"testRuntime"`, etc.  Names without the suffix are kept as-is.
     pub fn classpaths_by_gav(
         &self,
     ) -> std::collections::HashMap<String, std::collections::BTreeSet<String>> {

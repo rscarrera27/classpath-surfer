@@ -79,7 +79,7 @@ classpath-surfer search symbol --dependency "com.google.guava:guava"
 # Glob search for HTTP client classes
 classpath-surfer search symbol "Http*Client" --type class
 
-# Filter by classpath
+# Filter by classpath (compile, runtime, testCompile, testRuntime, ...)
 classpath-surfer search symbol Annotation --type class --classpath compile
 
 # FQN-like queries are auto-detected

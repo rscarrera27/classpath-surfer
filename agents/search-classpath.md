@@ -31,7 +31,7 @@ Options:
   - Query can be omitted with `--package` to list all symbols in matching packages
   - Use `search pkg` to discover available package names
 - `--access public,protected` — include non-public symbols (default: `public`; use `--access all` for everything)
-- `--classpath <name>` — narrow by classpath (e.g., `compile`)
+- `--classpath <name>` — narrow by classpath (e.g., `compile`, `runtime`, `testCompile`, `testRuntime`)
 - `--limit N` / `--offset N` — pagination
 
 Smart search behavior (auto-detected from query string):

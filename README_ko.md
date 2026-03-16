@@ -80,7 +80,7 @@ classpath-surfer search symbol --dependency "com.google.guava:guava"
 # "HTTP 클라이언트 관련 클래스 전부 보여줘"
 classpath-surfer search symbol "Http*Client" --type class
 
-# "compile에서만 보이는 어노테이션 찾기"
+# "compile에서만 보이는 어노테이션 찾기" (compile, runtime, testCompile, testRuntime, ...)
 classpath-surfer search symbol Annotation --type class --classpath compile
 
 # FQN도 그대로 넣으면 자동 감지
