@@ -183,6 +183,27 @@ fn agentic_pkgs_filter() {
 }
 
 #[test]
+fn agentic_pkgs_dependency() {
+    let project = require_indexed_project!();
+    let output = common::cli_cmd(&project.project_dir)
+        .args([
+            "pkgs",
+            "--dependency",
+            "com.google.code.gson:gson:*",
+            "--agentic",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(0));
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("should produce valid JSON");
+    assert!(json["total_count"].as_u64().unwrap() > 0);
+    assert_eq!(json["dependency"], "com.google.code.gson:gson:*");
+    assert!(!json["matched_gavs"].as_array().unwrap().is_empty());
+}
+
+#[test]
 fn agentic_search_dependency_json_output() {
     let project = require_indexed_project!();
     let output = common::cli_cmd(&project.project_dir)

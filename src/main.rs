@@ -225,12 +225,17 @@ EXAMPLES:
 EXAMPLES:
   classpath-surfer pkgs
   classpath-surfer pkgs --filter 'com.google.*'
+  classpath-surfer pkgs --dependency 'com.google.*:guava:*'
   classpath-surfer pkgs --limit 10 --offset 20"
     )]
     Pkgs {
         /// Filter packages by pattern (e.g., "com.google.*")
         #[arg(long)]
         filter: Option<String>,
+
+        /// Restrict to dependencies matching a GAV pattern (e.g., "com.google.*:guava:*")
+        #[arg(long)]
+        dependency: Option<String>,
 
         #[command(flatten)]
         pagination: Pagination,
@@ -443,11 +448,16 @@ fn main() {
                 )
             }
         }
-        Commands::Pkgs { filter, pagination } => render(
+        Commands::Pkgs {
+            filter,
+            dependency,
+            pagination,
+        } => render(
             output_mode,
             cli::pkgs::run(
                 &project_dir,
                 filter.as_deref(),
+                dependency.as_deref(),
                 pagination.limit,
                 pagination.offset,
             ),

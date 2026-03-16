@@ -198,6 +198,12 @@ pub struct PkgsOutput {
     /// Filter pattern applied (if any).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filter: Option<String>,
+    /// GAV pattern used to restrict to specific dependencies.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dependency: Option<String>,
+    /// GAVs that matched the dependency pattern.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub matched_gavs: Option<Vec<String>>,
     /// Total number of packages matching the filter.
     pub total_count: usize,
     /// Offset used for this page of results.

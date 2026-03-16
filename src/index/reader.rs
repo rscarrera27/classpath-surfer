@@ -16,6 +16,9 @@ use crate::model::{
 /// Result of GAV filter construction: the Tantivy query clause (if any) and matched GAVs.
 type GavFilter = (Option<Box<dyn tantivy::query::Query>>, Vec<String>);
 
+/// Packages with symbol counts, paired with the GAVs that were matched.
+type PackagesWithGavs = (Vec<(String, usize)>, Vec<String>);
+
 /// Read-only handle to the Tantivy symbol index.
 pub struct IndexReader {
     index: Index,
@@ -342,6 +345,36 @@ impl IndexReader {
         }
 
         Ok(results)
+    }
+
+    /// List unique packages within dependencies matching a GAV pattern.
+    ///
+    /// Searches all documents matching the GAV filter and aggregates by package.
+    /// Returns `(packages, matched_gavs)`.
+    pub fn list_packages_for_dependency(&self, dep: &str) -> Result<PackagesWithGavs> {
+        let schema = self.index.schema();
+        let searcher = self.reader.searcher();
+        let pkg_field = schema.get_field("package").unwrap();
+
+        let (filter, matched_gavs) = self.build_gav_filter(&schema, dep)?;
+        let query = match filter {
+            Some(q) => q,
+            None => return Ok((vec![], vec![])),
+        };
+
+        let total = searcher.search(&query, &Count)?;
+        let top_docs = searcher.search(&query, &TopDocs::with_limit(total))?;
+
+        let mut pkg_counts: BTreeMap<String, usize> = BTreeMap::new();
+        for (_score, addr) in top_docs {
+            let doc: tantivy::TantivyDocument = searcher.doc(addr)?;
+            if let Some(pkg_val) = doc.get_first(pkg_field).and_then(|v| v.as_str()) {
+                *pkg_counts.entry(pkg_val.to_string()).or_insert(0) += 1;
+            }
+        }
+
+        let results: Vec<(String, usize)> = pkg_counts.into_iter().collect();
+        Ok((results, matched_gavs))
     }
 
     /// List all unique GAVs in the index with their symbol counts.

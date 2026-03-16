@@ -477,7 +477,7 @@ fn scala_clojure_symbols() {
 fn pkgs_lists_all_packages() {
     let project = require_indexed_project!();
     let output =
-        cli::pkgs::run(&project.project_dir, None, 500, 0).expect("pkgs should succeed");
+        cli::pkgs::run(&project.project_dir, None, None, 500, 0).expect("pkgs should succeed");
     assert!(output.total_count > 0, "should have at least one package");
     assert!(!output.packages.is_empty());
     for pkg in &output.packages {
@@ -492,7 +492,7 @@ fn pkgs_lists_all_packages() {
 #[test]
 fn pkgs_filter() {
     let project = require_indexed_project!();
-    let output = cli::pkgs::run(&project.project_dir, Some("com.google.*"), 500, 0)
+    let output = cli::pkgs::run(&project.project_dir, Some("com.google.*"), None, 500, 0)
         .expect("pkgs with filter should succeed");
     assert!(
         output.total_count > 0,
@@ -511,10 +511,38 @@ fn pkgs_filter() {
 fn pkgs_pagination() {
     let project = require_indexed_project!();
     let output =
-        cli::pkgs::run(&project.project_dir, None, 2, 0).expect("pkgs with small limit");
+        cli::pkgs::run(&project.project_dir, None, None, 2, 0).expect("pkgs with small limit");
     assert!(output.packages.len() <= 2);
     if output.total_count > 2 {
         assert!(output.has_more, "should have more results");
+    }
+}
+
+#[test]
+fn pkgs_dependency_filter() {
+    let project = require_indexed_project!();
+    let output = cli::pkgs::run(
+        &project.project_dir,
+        None,
+        Some("com.google.code.gson:gson:*"),
+        500,
+        0,
+    )
+    .expect("pkgs with dependency should succeed");
+    assert!(
+        output.total_count > 0,
+        "gson should have at least one package"
+    );
+    assert!(
+        output.matched_gavs.as_ref().is_some_and(|g| !g.is_empty()),
+        "should have matched GAVs"
+    );
+    for pkg in &output.packages {
+        assert!(
+            pkg.package.starts_with("com.google.gson"),
+            "gson package should start with com.google.gson, got: {}",
+            pkg.package
+        );
     }
 }
 

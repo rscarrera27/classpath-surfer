@@ -231,10 +231,11 @@ pub fn deps(output: &DepsOutput) {
 /// Columns: `PACKAGE\tSYMBOL_COUNT`
 pub fn pkgs(output: &PkgsOutput) {
     if output.packages.is_empty() {
-        if let Some(ref filter) = output.filter {
-            println!("No packages matching '{filter}'.");
-        } else {
-            println!("No packages found.");
+        match (&output.filter, &output.dependency) {
+            (Some(f), Some(d)) => println!("No packages matching '{f}' in dependency '{d}'."),
+            (Some(f), None) => println!("No packages matching '{f}'."),
+            (None, Some(d)) => println!("No packages found in dependency '{d}'."),
+            (None, None) => println!("No packages found."),
         }
         return;
     }
