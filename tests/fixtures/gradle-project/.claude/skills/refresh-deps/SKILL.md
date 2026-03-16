@@ -7,7 +7,7 @@ allowed-tools: Bash(classpath-surfer *)
 Refresh the dependency index for this project.
 
 Run:
-1. `classpath-surfer refresh`
-2. `classpath-surfer status --agentic`
+1. `classpath-surfer index refresh`
+2. `classpath-surfer index status --agentic`
 
 Report the status to the user when done.

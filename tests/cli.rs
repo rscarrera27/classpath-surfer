@@ -12,7 +12,7 @@ use common::require_indexed_project;
 fn agentic_search_json_output() {
     let project = require_indexed_project!();
     let output = common::cli_cmd(&project.project_dir)
-        .args(["search", "ImmutableList", "--agentic"])
+        .args(["search", "symbol", "ImmutableList", "--agentic"])
         .output()
         .unwrap();
 
@@ -32,7 +32,7 @@ fn agentic_search_json_output() {
 #[test]
 fn agentic_error_json_format() {
     let output = common::cli_cmd(Path::new("/tmp/nonexistent-classpath-surfer-test"))
-        .args(["search", "Foo", "--agentic"])
+        .args(["search", "symbol", "Foo", "--agentic"])
         .output()
         .unwrap();
 
@@ -51,7 +51,7 @@ fn exit_code_for_missing_index() {
     std::fs::create_dir_all(&project_dir).unwrap();
 
     let output = common::cli_cmd(&project_dir)
-        .args(["search", "Foo"])
+        .args(["search", "symbol", "Foo"])
         .output()
         .unwrap();
 
@@ -66,7 +66,7 @@ fn exit_code_for_missing_index() {
 fn plain_output_to_pipe() {
     let project = require_indexed_project!();
     let output = common::cli_cmd(&project.project_dir)
-        .args(["search", "ImmutableList"])
+        .args(["search", "symbol", "ImmutableList"])
         .output()
         .unwrap();
 
@@ -86,6 +86,7 @@ fn access_filter_parsing() {
     let output = common::cli_cmd(&project.project_dir)
         .args([
             "search",
+            "symbol",
             "ImmutableList",
             "--agentic",
             "--access",
@@ -109,7 +110,7 @@ fn access_filter_parsing() {
 fn agentic_status_json_output() {
     let project = require_indexed_project!();
     let output = common::cli_cmd(&project.project_dir)
-        .args(["status", "--agentic"])
+        .args(["index", "status", "--agentic"])
         .output()
         .unwrap();
 
@@ -125,7 +126,7 @@ fn agentic_status_json_output() {
 fn agentic_deps_json_output() {
     let project = require_indexed_project!();
     let output = common::cli_cmd(&project.project_dir)
-        .args(["deps", "--agentic"])
+        .args(["search", "dep", "--agentic"])
         .output()
         .unwrap();
 
@@ -148,7 +149,7 @@ fn agentic_deps_json_output() {
 fn agentic_pkgs_json_output() {
     let project = require_indexed_project!();
     let output = common::cli_cmd(&project.project_dir)
-        .args(["pkgs", "--agentic"])
+        .args(["search", "pkg", "--agentic"])
         .output()
         .unwrap();
 
@@ -171,7 +172,7 @@ fn agentic_pkgs_json_output() {
 fn agentic_pkgs_query() {
     let project = require_indexed_project!();
     let output = common::cli_cmd(&project.project_dir)
-        .args(["pkgs", "com.google.*", "--agentic"])
+        .args(["search", "pkg", "com.google.*", "--agentic"])
         .output()
         .unwrap();
 
@@ -187,7 +188,8 @@ fn agentic_pkgs_dependency() {
     let project = require_indexed_project!();
     let output = common::cli_cmd(&project.project_dir)
         .args([
-            "pkgs",
+            "search",
+            "pkg",
             "--dependency",
             "com.google.code.gson:gson:*",
             "--agentic",
@@ -209,6 +211,7 @@ fn agentic_search_dependency_json_output() {
     let output = common::cli_cmd(&project.project_dir)
         .args([
             "search",
+            "symbol",
             "--dependency",
             "com.google.code.gson:gson:*",
             "--agentic",
@@ -233,7 +236,7 @@ fn agentic_search_dependency_json_output() {
 #[test]
 fn invalid_project_dir_error() {
     let output = common::cli_cmd(Path::new("/tmp/nonexistent-classpath-surfer-test"))
-        .args(["search", "Foo", "--agentic"])
+        .args(["search", "symbol", "Foo", "--agentic"])
         .output()
         .unwrap();
 
@@ -306,6 +309,7 @@ fn agentic_search_package_filter() {
     let output = common::cli_cmd(&project.project_dir)
         .args([
             "search",
+            "symbol",
             "Gson",
             "--package",
             "com.google.gson",
@@ -333,6 +337,7 @@ fn agentic_search_package_standalone() {
     let output = common::cli_cmd(&project.project_dir)
         .args([
             "search",
+            "symbol",
             "--package",
             "com.google.gson",
             "--agentic",

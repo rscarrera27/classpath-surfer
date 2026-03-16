@@ -1,7 +1,7 @@
 //! Tantivy-based symbol index.
 //!
 //! Manages the full-text search index that stores symbols extracted from
-//! dependency JARs. Includes schema definition, index writer, and reader.
+//! library JARs. Includes schema definition, index writer, and reader.
 
 /// Index querying and search result construction.
 pub mod reader;

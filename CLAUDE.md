@@ -77,7 +77,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps  # 문서 빌드 검증
 
 ### 에러 메시지
 - 실패한 입력을 에코백
-- 구체적 다음 행동을 제안 (예: "Run `classpath-surfer refresh` to build the index.")
+- 구체적 다음 행동을 제안 (예: "Run `classpath-surfer index refresh` to build the index.")
 - 일시적 에러와 영구적 에러를 구분
 
 ### 컨텍스트 효율성
@@ -94,7 +94,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --no-deps  # 문서 빌드 검증
 - `proto/kotlin_metadata.proto` — Kotlin 메타데이터 protobuf 스키마 (prost-build로 자동 생성)
 - `build.rs` — prost-build 설정 (proto 컴파일)
 - `scripts/sync-kotlin-proto.sh` — upstream Kotlin proto 동기화 도우미
-- `src/cli/` — 서브커맨드 핸들러 (`init`, `refresh`, `search`, `show`, `deps`, `pkgs`, `status`, `clean`)
+- `src/cli/` — 서브커맨드 핸들러 (`search {symbol|dep|pkg}`, `show`, `index {init|refresh|status|clean}`)
 - `src/cli/render.rs` — Plain 텍스트 렌더러
 - `src/error.rs` — 분류된 CLI 에러 타입 (`CliError`: exit code, error_code, retryable)
 - `src/gradle/` — Gradle init script 및 실행기

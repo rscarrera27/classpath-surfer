@@ -42,6 +42,7 @@ pub struct ConfigurationManifest {
     /// Configuration name (e.g. `"compileClasspath"`).
     pub name: String,
     /// Dependencies resolved under this configuration.
+    #[serde(alias = "libraries")]
     pub dependencies: Vec<DependencyInfo>,
 }
 

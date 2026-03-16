@@ -136,12 +136,12 @@ pub fn show(output: &ShowOutput) {
 /// Render index status as plain text.
 pub fn status(output: &StatusOutput) {
     if !output.initialized {
-        println!("Not initialized. Run `classpath-surfer init` first.");
+        println!("Not initialized. Run `classpath-surfer index init` first.");
         return;
     }
 
     if !output.has_index && output.dependency_count == 0 {
-        println!("No index built. Run `classpath-surfer refresh` to build it.");
+        println!("No index built. Run `classpath-surfer index refresh` to build it.");
         return;
     }
 

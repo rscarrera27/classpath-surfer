@@ -40,9 +40,9 @@ pub fn require_index(project_dir: &Path) -> Result<()> {
     if !index_dir.join("meta.json").exists() {
         return Err(CliError::resource_not_found(
             "INDEX_NOT_FOUND",
-            "No index found. Run `classpath-surfer refresh` to build it.",
+            "No index found. Run `classpath-surfer index refresh` to build it.",
         )
-        .with_suggested_command("classpath-surfer refresh")
+        .with_suggested_command("classpath-surfer index refresh")
         .into());
     }
     check_staleness(project_dir)
@@ -57,9 +57,9 @@ pub fn require_manifest(project_dir: &Path) -> Result<()> {
     if !manifest_path.exists() {
         return Err(CliError::resource_not_found(
             "INDEX_NOT_FOUND",
-            "No index found. Run `classpath-surfer refresh` to build it.",
+            "No index found. Run `classpath-surfer index refresh` to build it.",
         )
-        .with_suggested_command("classpath-surfer refresh")
+        .with_suggested_command("classpath-surfer index refresh")
         .into());
     }
     check_staleness(project_dir)
@@ -70,9 +70,9 @@ fn check_staleness(project_dir: &Path) -> Result<()> {
         return Err(CliError::resource_not_found(
             "INDEX_STALE",
             "Index is stale. Dependencies have changed since last indexing.\n\
-             Run `classpath-surfer refresh` to update.",
+             Run `classpath-surfer index refresh` to update.",
         )
-        .with_suggested_command("classpath-surfer refresh")
+        .with_suggested_command("classpath-surfer index refresh")
         .into());
     }
     Ok(())

@@ -54,10 +54,10 @@ brew install rscarrera27/tap/classpath-surfer
 
 ```bash
 cd your-gradle-project
-classpath-surfer init      # 설정 파일, Gradle init script 설치 후 초기 refresh 실행
+classpath-surfer index init      # 설정 파일, Gradle init script 설치 후 초기 refresh 실행
 
 # 인덱스가 정상적으로 생성되었는지 확인
-classpath-surfer status
+classpath-surfer index status
 # → 38 dependencies, 77,219 symbols indexed, 2.1 MB on disk
 ```
 
@@ -65,26 +65,26 @@ classpath-surfer status
 
 ```bash
 # "ImmutableList가 어떤 패키지에 있지?" — 이름만으로 검색
-classpath-surfer search ImmutableList
+classpath-surfer search symbol ImmutableList
 
 # "Immutable 뭔가가 있었는데…" — CamelCase 토큰 단위로 매칭
 # ImmutableList, ImmutableMap, ImmutableSet 등이 모두 검색됨
-classpath-surfer search Immutable
+classpath-surfer search symbol Immutable
 
 # "kotlinx-coroutines에서 코루틴 시작하는 함수가 뭐였지?"
-classpath-surfer search launch --type method --dependency "org.jetbrains.kotlinx:*"
+classpath-surfer search symbol launch --type method --dependency "org.jetbrains.kotlinx:*"
 
 # "Guava에 어떤 심볼이 있는지 전부 보여줘"
-classpath-surfer search --dependency "com.google.guava:guava"
+classpath-surfer search symbol --dependency "com.google.guava:guava"
 
 # "HTTP 클라이언트 관련 클래스 전부 보여줘"
-classpath-surfer search "Http*Client" --type class
+classpath-surfer search symbol "Http*Client" --type class
 
 # "compile에서만 보이는 어노테이션 찾기"
-classpath-surfer search Annotation --type class --scope compileClasspath
+classpath-surfer search symbol Annotation --type class --scope compileClasspath
 
 # FQN도 그대로 넣으면 자동 감지
-classpath-surfer search com.google.common.collect.ImmutableList
+classpath-surfer search symbol com.google.common.collect.ImmutableList
 ```
 
 ### 소스 코드 보기
@@ -108,37 +108,38 @@ Source JAR가 있으면 원본 소스를, 없으면 CFR/Vineflower로 자동 디
 
 ```bash
 # 인덱스된 의존성 목록 — 각 의존성의 심볼 수와 scope 표시
-classpath-surfer deps
+classpath-surfer search dep
 
 # Netty 관련 의존성만 필터
-classpath-surfer deps "io.netty:*"
+classpath-surfer search dep "io.netty:*"
 
 # runtime에만 포함된 의존성 확인
-classpath-surfer deps --scope runtimeClasspath
+classpath-surfer search dep --scope runtimeClasspath
 ```
 
 ### AI 에이전트 / 스크립트 연동
 
 ```bash
 # 모든 커맨드에 --agentic을 붙이면 구조화 JSON 출력
-classpath-surfer search ImmutableList --agentic
+classpath-surfer search symbol ImmutableList --agentic
 classpath-surfer show com.google.common.collect.ImmutableList --agentic
 
 # 비-TTY에서는 자동으로 Plain 텍스트 출력 (파이프 친화적)
-classpath-surfer search ImmutableList | head
+classpath-surfer search symbol ImmutableList | head
 ```
 
 ## 커맨드
 
 | 커맨드 | 설명 |
 |--------|------|
-| `init` | Gradle init script, 기본 설정 후 초기 refresh 실행 |
-| `refresh` | Gradle로 classpath 추출 후 심볼 인덱스 빌드/업데이트 (인덱스 최신 시 Gradle 생략; `--force`로 강제) |
-| `search <query>` | 인덱스에서 심볼 검색 |
+| `search symbol <query>` | 인덱스에서 심볼 검색 |
+| `search dep [pattern]` | 인덱스된 의존성 목록과 심볼 수 표시 |
+| `search pkg [pattern]` | 인덱스된 Java 패키지 목록 표시 |
 | `show <fqn>` | 특정 심볼의 소스 코드 표시 (기본적으로 대상 심볼에 포커싱) |
-| `deps` | 인덱스된 의존성 목록과 심볼 수 표시 |
-| `status` | 인덱스 상태 표시 (의존성 수, 심볼 수, 변경 여부, 디스크 크기) |
-| `clean` | 인덱스 데이터 삭제 |
+| `index init` | Gradle init script, 기본 설정 후 초기 refresh 실행 |
+| `index refresh` | Gradle로 classpath 추출 후 심볼 인덱스 빌드/업데이트 (인덱스 최신 시 Gradle 생략; `--force`로 강제) |
+| `index status` | 인덱스 상태 표시 (의존성 수, 심볼 수, 변경 여부, 디스크 크기) |
+| `index clean` | 인덱스 데이터 삭제 |
 | `--agentic` | 글로벌 플래그: AI 에이전트 및 스크립트용 구조화 JSON 출력 |
 
 ## 성능
@@ -194,7 +195,7 @@ graph TD
 2. **파싱** — `cafebabe` 크레이트로 각 JAR을 열어 모든 `.class` 파일에서 클래스명, 메서드, 필드, 디스크립터, 접근 플래그를 추출합니다. Kotlin 클래스의 경우 `@kotlin.Metadata` 어노테이션을 protobuf(prost)로 디코딩하여 Kotlin 네이티브 시그니처를 생성합니다. `SourceFile` 속성으로 소스 언어를 판별합니다.
 3. **인덱싱** — 추출된 심볼을 FQN, 단순 이름, camelCase 분리 토큰, 종류, 시그니처, GAV 필드와 함께 Tantivy 인덱스에 기록합니다.
 4. **검색** — 쿼리가 Tantivy 인덱스를 조회합니다. 결과는 관련도 순으로 정렬되어 테이블 또는 JSON으로 반환됩니다.
-5. **변경 감지** — 검색 시마다 lockfile 해시와 빌드 파일 수정 시간을 인덱싱 당시의 스냅샷과 비교합니다. 변경이 감지되면 `refresh`를 요청합니다.
+5. **변경 감지** — 검색 시마다 lockfile 해시와 빌드 파일 수정 시간을 인덱싱 당시의 스냅샷과 비교합니다. 변경이 감지되면 `index refresh`를 요청합니다.
 
 ## Claude Code 통합
 
@@ -218,7 +219,7 @@ Claude Code가 외부 의존성 API를 직접 탐색하고 읽을 수 있게 해
 
 ## 설정
 
-`classpath-surfer init`이 `.classpath-surfer/config.json`을 생성합니다:
+`classpath-surfer index init`이 `.classpath-surfer/config.json`을 생성합니다:
 
 ```json
 {

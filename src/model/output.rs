@@ -114,7 +114,7 @@ pub struct ShowOutput {
 /// Focus metadata for windowed source display.
 ///
 /// Used internally by TUI (scroll) and plain renderer (line numbering).
-/// Not included in JSON output — `source_path#L` fragment serves that role.
+/// Not included in JSON output --- `source_path#L` fragment serves that role.
 #[derive(Debug)]
 pub struct FocusInfo {
     /// 1-based line number of the symbol definition in the original source.
@@ -139,7 +139,7 @@ pub struct SourceView {
     pub source: SourceOrigin,
     /// Number of lines in the source content.
     pub line_count: usize,
-    /// Focus metadata — used internally by TUI (scroll position) and plain
+    /// Focus metadata --- used internally by TUI (scroll position) and plain
     /// renderer (line numbering).  Not serialized to JSON; the `source_path`
     /// `#L` fragment already encodes the visible range for external consumers.
     #[serde(skip)]
@@ -225,7 +225,7 @@ pub struct PkgInfo {
     pub symbol_count: usize,
 }
 
-/// Structured output for the `deps` command.
+/// Structured output for the `search dep` command.
 #[derive(Debug, Serialize)]
 pub struct DepsOutput {
     /// Glob query pattern applied (if any).

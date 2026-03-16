@@ -55,94 +55,9 @@ struct Pagination {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Install Gradle init script, default config, and run initial refresh
-    #[command(
-        long_about = "Install Gradle init script, default config, and run initial refresh.\n\n\
-            Creates the .classpath-surfer/ directory, writes config.json and the Gradle\n\
-            init script, updates .gitignore, and performs the first index build.",
-        after_help = "\
-EXAMPLES:
-  classpath-surfer init
-  cpsurf init --project-dir /path/to/project"
-    )]
-    Init,
-
-    /// Extract classpath from Gradle and build/update the symbol index
-    #[command(
-        long_about = "Extract classpath from Gradle and build/update the symbol index.\n\n\
-            Runs the Gradle classpathSurferExport task, merges per-module manifests,\n\
-            computes a GAV-level diff, and performs incremental or full reindexing.\n\
-            Skips Gradle if the index is fresh (unless --force is used).",
-        after_help = "\
-EXAMPLES:
-  classpath-surfer refresh
-  classpath-surfer refresh --force
-  classpath-surfer refresh --configurations compileClasspath
-  classpath-surfer refresh --timeout 600"
-    )]
-    Refresh {
-        /// Gradle configurations to resolve (comma-separated)
-        #[arg(long, value_delimiter = ',')]
-        configurations: Vec<String>,
-
-        /// Force Gradle re-run and full re-index, ignoring cached state
-        #[arg(long, short = 'f')]
-        force: bool,
-
-        /// Timeout in seconds for Gradle execution (default: 300)
-        #[arg(long)]
-        timeout: Option<u64>,
-    },
-
-    /// Search for symbols in indexed dependencies
-    #[command(
-        long_about = "Search for symbols in indexed dependencies.\n\n\
-            Supports smart text search, glob patterns (*, ?), and auto-detected FQN\n\
-            matching. Results can be filtered by symbol type, access level, dependency\n\
-            GAV pattern, Java package pattern, and configuration scope. When --dependency\n\
-            or --package is used without a query, lists all symbols in matching entries.",
-        after_help = "\
-EXAMPLES:
-  classpath-surfer search ImmutableList
-  classpath-surfer search 'Immutable*List'
-  classpath-surfer search 'com.google.common.collect.Immutable*'
-  classpath-surfer search --dependency 'com.google.*:guava:*'
-  classpath-surfer search --package 'com.google.common.collect'
-  classpath-surfer search ImmutableList --type class --access public,protected
-  classpath-surfer search ImmutableList --agentic"
-    )]
-    Search {
-        /// Symbol name, FQN, or glob pattern (optional when --dependency is set)
-        query: Option<String>,
-
-        /// Filter by symbol type (comma-separated)
-        #[arg(long, value_delimiter = ',')]
-        r#type: Vec<SymbolKind>,
-
-        /// Maximum number of results (default: 20 for agentic/plain, 50 for TUI)
-        #[arg(long)]
-        limit: Option<usize>,
-
-        /// Number of results to skip (for pagination)
-        #[arg(long, default_value_t = 0)]
-        offset: usize,
-
-        /// Restrict search to dependencies matching a GAV pattern (e.g., "com.google.*:guava:*")
-        #[arg(long)]
-        dependency: Option<String>,
-
-        /// Filter by access level (comma-separated)
-        #[arg(long, value_delimiter = ',', default_values_t = vec![AccessLevel::Public])]
-        access: Vec<AccessLevel>,
-
-        /// Filter by configuration scope (e.g., compileClasspath, runtimeClasspath)
-        #[arg(long)]
-        scope: Option<String>,
-
-        /// Filter by Java package pattern (glob supported, e.g., "com.google.common.*")
-        #[arg(long)]
-        package: Option<String>,
-    },
+    /// Search for symbols, dependencies, or packages in the index
+    #[command(subcommand)]
+    Search(SearchCommands),
 
     /// Show source code for a specific symbol
     #[command(
@@ -183,6 +98,63 @@ EXAMPLES:
         full: bool,
     },
 
+    /// Manage the symbol index
+    #[command(subcommand)]
+    Index(IndexCommands),
+}
+
+#[derive(Subcommand)]
+enum SearchCommands {
+    /// Search for symbols in indexed dependencies
+    #[command(
+        long_about = "Search for symbols in indexed dependencies.\n\n\
+            Supports smart text search, glob patterns (*, ?), and auto-detected FQN\n\
+            matching. Results can be filtered by symbol type, access level, dependency\n\
+            GAV pattern, Java package pattern, and configuration scope. When --dependency\n\
+            or --package is used without a query, lists all symbols in matching entries.",
+        after_help = "\
+EXAMPLES:
+  classpath-surfer search symbol ImmutableList
+  classpath-surfer search symbol 'Immutable*List'
+  classpath-surfer search symbol 'com.google.common.collect.Immutable*'
+  classpath-surfer search symbol --dependency 'com.google.*:guava:*'
+  classpath-surfer search symbol --package 'com.google.common.collect'
+  classpath-surfer search symbol ImmutableList --type class --access public,protected
+  classpath-surfer search symbol ImmutableList --agentic"
+    )]
+    Symbol {
+        /// Symbol name, FQN, or glob pattern (optional when --dependency is set)
+        query: Option<String>,
+
+        /// Filter by symbol type (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        r#type: Vec<SymbolKind>,
+
+        /// Maximum number of results (default: 20 for agentic/plain, 50 for TUI)
+        #[arg(long)]
+        limit: Option<usize>,
+
+        /// Number of results to skip (for pagination)
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+
+        /// Restrict search to dependencies matching a GAV pattern (e.g., "com.google.*:guava:*")
+        #[arg(long)]
+        dependency: Option<String>,
+
+        /// Filter by access level (comma-separated)
+        #[arg(long, value_delimiter = ',', default_values_t = vec![AccessLevel::Public])]
+        access: Vec<AccessLevel>,
+
+        /// Filter by configuration scope (e.g., compileClasspath, runtimeClasspath)
+        #[arg(long)]
+        scope: Option<String>,
+
+        /// Filter by Java package pattern (glob supported, e.g., "com.google.common.*")
+        #[arg(long)]
+        package: Option<String>,
+    },
+
     /// List indexed dependencies with symbol counts
     #[command(
         long_about = "List indexed dependencies with symbol counts.\n\n\
@@ -190,12 +162,12 @@ EXAMPLES:
             indexed dependencies. Supports GAV glob pattern filtering and pagination.",
         after_help = "\
 EXAMPLES:
-  classpath-surfer deps
-  classpath-surfer deps 'com.google.*:*'
-  classpath-surfer deps --scope compileClasspath
-  classpath-surfer deps --limit 10 --offset 20"
+  classpath-surfer search dep
+  classpath-surfer search dep 'com.google.*:*'
+  classpath-surfer search dep --scope compileClasspath
+  classpath-surfer search dep --limit 10 --offset 20"
     )]
-    Deps {
+    Dep {
         /// Filter dependencies by GAV pattern (e.g., "com.google.*:*")
         query: Option<String>,
 
@@ -211,15 +183,15 @@ EXAMPLES:
     #[command(
         long_about = "List unique Java packages in the index with symbol counts.\n\n\
             Shows all distinct package names found across indexed dependencies.\n\
-            Useful for discovering package names to use with `search --package`.",
+            Useful for discovering package names to use with `search symbol --package`.",
         after_help = "\
 EXAMPLES:
-  classpath-surfer pkgs
-  classpath-surfer pkgs 'com.google.*'
-  classpath-surfer pkgs --dependency 'com.google.*:guava:*'
-  classpath-surfer pkgs --limit 10 --offset 20"
+  classpath-surfer search pkg
+  classpath-surfer search pkg 'com.google.*'
+  classpath-surfer search pkg --lib 'com.google.*:guava:*'
+  classpath-surfer search pkg --limit 10 --offset 20"
     )]
-    Pkgs {
+    Pkg {
         /// Filter packages by pattern (e.g., "com.google.*")
         query: Option<String>,
 
@@ -230,6 +202,48 @@ EXAMPLES:
         #[command(flatten)]
         pagination: Pagination,
     },
+}
+
+#[derive(Subcommand)]
+enum IndexCommands {
+    /// Install Gradle init script, default config, and run initial refresh
+    #[command(
+        long_about = "Install Gradle init script, default config, and run initial refresh.\n\n\
+            Creates the .classpath-surfer/ directory, writes config.json and the Gradle\n\
+            init script, updates .gitignore, and performs the first index build.",
+        after_help = "\
+EXAMPLES:
+  classpath-surfer index init
+  cpsurf index init --project-dir /path/to/project"
+    )]
+    Init,
+
+    /// Extract classpath from Gradle and build/update the symbol index
+    #[command(
+        long_about = "Extract classpath from Gradle and build/update the symbol index.\n\n\
+            Runs the Gradle classpathSurferExport task, merges per-module manifests,\n\
+            computes a GAV-level diff, and performs incremental or full reindexing.\n\
+            Skips Gradle if the index is fresh (unless --force is used).",
+        after_help = "\
+EXAMPLES:
+  classpath-surfer index refresh
+  classpath-surfer index refresh --force
+  classpath-surfer index refresh --configurations compileClasspath
+  classpath-surfer index refresh --timeout 600"
+    )]
+    Refresh {
+        /// Gradle configurations to resolve (comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        configurations: Vec<String>,
+
+        /// Force Gradle re-run and full re-index, ignoring cached state
+        #[arg(long, short = 'f')]
+        force: bool,
+
+        /// Timeout in seconds for Gradle execution (default: 300)
+        #[arg(long)]
+        timeout: Option<u64>,
+    },
 
     /// Show index status
     #[command(
@@ -238,8 +252,8 @@ EXAMPLES:
             staleness, and index disk size.",
         after_help = "\
 EXAMPLES:
-  classpath-surfer status
-  classpath-surfer status --agentic"
+  classpath-surfer index status
+  classpath-surfer index status --agentic"
     )]
     Status,
 
@@ -251,7 +265,7 @@ EXAMPLES:
             Safe to run multiple times (idempotent).",
         after_help = "\
 EXAMPLES:
-  classpath-surfer clean"
+  classpath-surfer index clean"
     )]
     Clean,
 }
@@ -283,102 +297,124 @@ fn main() {
     let config = classpath_surfer::config::Config::load(&project_dir).unwrap_or_default();
 
     let result = match cli.command {
-        Commands::Init => render(
-            output_mode,
-            cli::init::run(&project_dir),
-            cli::render::init,
-            None::<fn(&_) -> anyhow::Result<()>>,
-        ),
-        Commands::Refresh {
-            configurations,
-            force,
-            timeout,
-        } => {
-            let configs = if configurations.is_empty() {
-                config.configurations.clone()
-            } else {
-                configurations
-            };
-            let timeout_secs = timeout.or(config.gradle_timeout).unwrap_or(300);
-            render(
-                output_mode,
-                cli::refresh::run(&project_dir, &configs, force, timeout_secs),
-                cli::render::refresh,
-                None::<fn(&_) -> anyhow::Result<()>>,
-            )
-        }
-        Commands::Search {
-            query,
-            r#type,
-            limit,
-            offset,
-            access,
-            dependency,
-            scope,
-            package,
-        } => {
-            // Validate: at least one of query, dependency, or package must be provided
-            if query.is_none() && dependency.is_none() && package.is_none() {
-                let err: anyhow::Error = CliError::usage(
-                    "MISSING_QUERY",
-                    "Either a search query, --dependency, or --package must be provided.",
-                )
-                .into();
-                if output_mode == OutputMode::Agentic {
-                    output::emit_json_error(&err);
+        Commands::Search(search_cmd) => match search_cmd {
+            SearchCommands::Symbol {
+                query,
+                r#type,
+                limit,
+                offset,
+                access,
+                dependency,
+                scope,
+                package,
+            } => {
+                // Validate: at least one of query, dependency, or package must be provided
+                if query.is_none() && dependency.is_none() && package.is_none() {
+                    let err: anyhow::Error = CliError::usage(
+                        "MISSING_QUERY",
+                        "Either a search query, --dependency, or --package must be provided.",
+                    )
+                    .into();
+                    if output_mode == OutputMode::Agentic {
+                        output::emit_json_error(&err);
+                    } else {
+                        eprintln!("Error: {err:#}");
+                        std::process::exit(2);
+                    }
+                }
+
+                let access_levels: Vec<AccessLevel> = if access.contains(&AccessLevel::All) {
+                    vec![]
                 } else {
-                    eprintln!("Error: {err:#}");
-                    std::process::exit(2);
+                    access
+                };
+                let is_listing = query.is_none();
+
+                if output_mode == OutputMode::Tui {
+                    let effective_limit = limit.unwrap_or(50);
+                    let sq = SearchQuery {
+                        query: query.as_deref(),
+                        symbol_types: &r#type,
+                        limit: effective_limit,
+                        dependency: dependency.as_deref(),
+                        access_levels: &access_levels,
+                        offset: 0,
+                        scope: scope.as_deref(),
+                        package: package.as_deref(),
+                    };
+                    cli::require_index(&project_dir).and_then(|()| {
+                        classpath_surfer::tui::search::run_interactive(&project_dir, &sq)
+                    })
+                } else {
+                    let effective_limit = limit.unwrap_or(20);
+                    let sq = SearchQuery {
+                        query: query.as_deref(),
+                        symbol_types: &r#type,
+                        limit: effective_limit,
+                        dependency: dependency.as_deref(),
+                        access_levels: &access_levels,
+                        offset,
+                        scope: scope.as_deref(),
+                        package: package.as_deref(),
+                    };
+                    let plain_renderer = if is_listing {
+                        cli::render::search_list
+                    } else {
+                        cli::render::search
+                    };
+                    render(
+                        output_mode,
+                        cli::search::run(&project_dir, &sq),
+                        plain_renderer,
+                        None::<fn(&_) -> anyhow::Result<()>>,
+                    )
                 }
             }
-
-            let access_levels: Vec<AccessLevel> = if access.contains(&AccessLevel::All) {
-                vec![]
-            } else {
-                access
-            };
-            let is_listing = query.is_none();
-
-            if output_mode == OutputMode::Tui {
-                let effective_limit = limit.unwrap_or(50);
-                let sq = SearchQuery {
-                    query: query.as_deref(),
-                    symbol_types: &r#type,
-                    limit: effective_limit,
-                    dependency: dependency.as_deref(),
-                    access_levels: &access_levels,
-                    offset: 0,
-                    scope: scope.as_deref(),
-                    package: package.as_deref(),
-                };
-                cli::require_index(&project_dir).and_then(|()| {
-                    classpath_surfer::tui::search::run_interactive(&project_dir, &sq)
-                })
-            } else {
-                let effective_limit = limit.unwrap_or(20);
-                let sq = SearchQuery {
-                    query: query.as_deref(),
-                    symbol_types: &r#type,
-                    limit: effective_limit,
-                    dependency: dependency.as_deref(),
-                    access_levels: &access_levels,
-                    offset,
-                    scope: scope.as_deref(),
-                    package: package.as_deref(),
-                };
-                let plain_renderer = if is_listing {
-                    cli::render::search_list
+            SearchCommands::Dep {
+                query,
+                scope,
+                pagination,
+            } => {
+                if output_mode == OutputMode::Tui {
+                    cli::require_index(&project_dir).and_then(|()| {
+                        classpath_surfer::tui::deps::run(
+                            &project_dir,
+                            query.as_deref(),
+                            scope.as_deref(),
+                        )
+                    })
                 } else {
-                    cli::render::search
-                };
-                render(
-                    output_mode,
-                    cli::search::run(&project_dir, &sq),
-                    plain_renderer,
-                    None::<fn(&_) -> anyhow::Result<()>>,
-                )
+                    render(
+                        output_mode,
+                        cli::deps::run(
+                            &project_dir,
+                            query.as_deref(),
+                            scope.as_deref(),
+                            pagination.limit,
+                            pagination.offset,
+                        ),
+                        cli::render::deps,
+                        None::<fn(&_) -> anyhow::Result<()>>,
+                    )
+                }
             }
-        }
+            SearchCommands::Pkg {
+                query,
+                dependency,
+                pagination,
+            } => render(
+                output_mode,
+                cli::pkgs::run(
+                    &project_dir,
+                    query.as_deref(),
+                    dependency.as_deref(),
+                    pagination.limit,
+                    pagination.offset,
+                ),
+                cli::render::pkgs,
+                None::<fn(&_) -> anyhow::Result<()>>,
+            ),
+        },
         Commands::Show {
             fqn,
             decompiler,
@@ -404,62 +440,44 @@ fn main() {
                 Some(|out: &_| classpath_surfer::tui::show::run(out)),
             )
         }
-        Commands::Deps {
-            query,
-            scope,
-            pagination,
-        } => {
-            if output_mode == OutputMode::Tui {
-                cli::require_index(&project_dir).and_then(|()| {
-                    classpath_surfer::tui::deps::run(
-                        &project_dir,
-                        query.as_deref(),
-                        scope.as_deref(),
-                    )
-                })
-            } else {
+        Commands::Index(index_cmd) => match index_cmd {
+            IndexCommands::Init => render(
+                output_mode,
+                cli::init::run(&project_dir),
+                cli::render::init,
+                None::<fn(&_) -> anyhow::Result<()>>,
+            ),
+            IndexCommands::Refresh {
+                configurations,
+                force,
+                timeout,
+            } => {
+                let configs = if configurations.is_empty() {
+                    config.configurations.clone()
+                } else {
+                    configurations
+                };
+                let timeout_secs = timeout.or(config.gradle_timeout).unwrap_or(300);
                 render(
                     output_mode,
-                    cli::deps::run(
-                        &project_dir,
-                        query.as_deref(),
-                        scope.as_deref(),
-                        pagination.limit,
-                        pagination.offset,
-                    ),
-                    cli::render::deps,
+                    cli::refresh::run(&project_dir, &configs, force, timeout_secs),
+                    cli::render::refresh,
                     None::<fn(&_) -> anyhow::Result<()>>,
                 )
             }
-        }
-        Commands::Pkgs {
-            query,
-            dependency,
-            pagination,
-        } => render(
-            output_mode,
-            cli::pkgs::run(
-                &project_dir,
-                query.as_deref(),
-                dependency.as_deref(),
-                pagination.limit,
-                pagination.offset,
+            IndexCommands::Status => render(
+                output_mode,
+                cli::status::run(&project_dir),
+                cli::render::status,
+                None::<fn(&_) -> anyhow::Result<()>>,
             ),
-            cli::render::pkgs,
-            None::<fn(&_) -> anyhow::Result<()>>,
-        ),
-        Commands::Status => render(
-            output_mode,
-            cli::status::run(&project_dir),
-            cli::render::status,
-            None::<fn(&_) -> anyhow::Result<()>>,
-        ),
-        Commands::Clean => render(
-            output_mode,
-            cli::clean::run(&project_dir),
-            cli::render::clean,
-            None::<fn(&_) -> anyhow::Result<()>>,
-        ),
+            IndexCommands::Clean => render(
+                output_mode,
+                cli::clean::run(&project_dir),
+                cli::render::clean,
+                None::<fn(&_) -> anyhow::Result<()>>,
+            ),
+        },
     };
 
     if let Err(e) = result {

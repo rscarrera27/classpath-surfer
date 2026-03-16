@@ -10,7 +10,7 @@ Show the source code for "$ARGUMENTS".
 Run: `classpath-surfer show "$ARGUMENTS" --agentic`
 
 If the output contains "Index is stale" or "No index found", run:
-1. `classpath-surfer refresh`
+1. `classpath-surfer index refresh`
 2. `classpath-surfer show "$ARGUMENTS" --agentic`
 
 If it returns decompiled source, mention that to the user.

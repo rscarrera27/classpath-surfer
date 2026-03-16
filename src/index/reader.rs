@@ -30,7 +30,7 @@ impl IndexReader {
     ///
     /// Returns an error if the index schema is missing required fields,
     /// indicating that the index was built with an older version and needs
-    /// to be rebuilt via `classpath-surfer refresh --force`.
+    /// to be rebuilt via `classpath-surfer index refresh --force`.
     pub fn open(index_dir: &Path) -> Result<Self> {
         let index = Index::open_in_dir(index_dir)
             .with_context(|| format!("opening index at {}", index_dir.display()))?;
@@ -61,11 +61,11 @@ impl IndexReader {
                 "INDEX_OUTDATED",
                 format!(
                     "Index schema is outdated (missing fields: {}). \
-                     Run `classpath-surfer refresh` to rebuild.",
+                     Run `classpath-surfer index refresh` to rebuild.",
                     missing.join(", ")
                 ),
             )
-            .with_suggested_command("classpath-surfer refresh")
+            .with_suggested_command("classpath-surfer index refresh")
             .into());
         }
 
@@ -86,7 +86,7 @@ impl IndexReader {
     /// - **Smart search** — everything else → token search on `simple_name` +
     ///   `name_parts` with AND semantics and prefix matching.
     ///
-    /// When `query` is `None`, all symbols are returned (requires `dependency`).
+    /// When `query` is `None`, all symbols are returned (requires `lib`).
     /// Results without a text query are sorted by kind then FQN.
     ///
     /// Results can be narrowed by symbol type, a `dependency` GAV pattern
@@ -217,7 +217,7 @@ impl IndexReader {
         Ok((results, total_count, matched_gavs))
     }
 
-    /// Build a GAV filter query from a dependency pattern.
+    /// Build a GAV filter query from a dependency GAV pattern.
     ///
     /// Returns a filter with matched GAVs, or a `None` query when a glob
     /// pattern matches zero GAVs (caller should short-circuit with no results).

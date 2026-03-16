@@ -10,7 +10,7 @@
 //!    and extracts type, method, and field symbols along with their descriptors.
 //! 3. **Tantivy indexing** ([`index`]) — Stores the extracted symbols in a local
 //!    Tantivy full-text index for sub-millisecond lookups.
-//! 4. **Search** ([`cli`]) — Exposes subcommands (`search`, `show`, `status`, …) that
+//! 4. **Search** ([`cli`]) — Exposes subcommands (`search symbol`, `show`, `index status`, …) that
 //!    query the index and present results to the user.
 //!
 //! ## Module overview

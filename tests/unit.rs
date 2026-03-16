@@ -336,8 +336,8 @@ fn agentic_error_output() {
     );
     assert_eq!(
         cli_err.suggested_command.as_deref(),
-        Some("classpath-surfer refresh"),
-        "suggested_command should be 'classpath-surfer refresh'"
+        Some("classpath-surfer index refresh"),
+        "suggested_command should be 'classpath-surfer index refresh'"
     );
 }
 

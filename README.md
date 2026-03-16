@@ -54,10 +54,10 @@ brew install rscarrera27/tap/classpath-surfer
 
 ```bash
 cd your-gradle-project
-classpath-surfer init      # writes config, Gradle init script, then runs initial refresh
+classpath-surfer index init      # writes config, Gradle init script, then runs initial refresh
 
 # Verify the index was built
-classpath-surfer status
+classpath-surfer index status
 # → 38 dependencies, 77,219 symbols indexed, 2.1 MB on disk
 ```
 
@@ -65,25 +65,25 @@ classpath-surfer status
 
 ```bash
 # Search by name
-classpath-surfer search ImmutableList
+classpath-surfer search symbol ImmutableList
 
 # CamelCase token matching — finds ImmutableList, ImmutableMap, ImmutableSet, etc.
-classpath-surfer search Immutable
+classpath-surfer search symbol Immutable
 
 # Find coroutine launchers in kotlinx-coroutines
-classpath-surfer search launch --type method --dependency "org.jetbrains.kotlinx:*"
+classpath-surfer search symbol launch --type method --dependency "org.jetbrains.kotlinx:*"
 
 # List all symbols in a specific dependency
-classpath-surfer search --dependency "com.google.guava:guava"
+classpath-surfer search symbol --dependency "com.google.guava:guava"
 
 # Glob search for HTTP client classes
-classpath-surfer search "Http*Client" --type class
+classpath-surfer search symbol "Http*Client" --type class
 
 # Filter by configuration scope
-classpath-surfer search Annotation --type class --scope compileClasspath
+classpath-surfer search symbol Annotation --type class --scope compileClasspath
 
 # FQN-like queries are auto-detected
-classpath-surfer search com.google.common.collect.ImmutableList
+classpath-surfer search symbol com.google.common.collect.ImmutableList
 ```
 
 ### Read the source
@@ -107,37 +107,38 @@ If a `-sources.jar` is available it will be used; otherwise the class is decompi
 
 ```bash
 # List indexed dependencies with symbol counts and scopes
-classpath-surfer deps
+classpath-surfer search dep
 
 # Filter by GAV pattern
-classpath-surfer deps "io.netty:*"
+classpath-surfer search dep "io.netty:*"
 
 # Show only runtime dependencies
-classpath-surfer deps --scope runtimeClasspath
+classpath-surfer search dep --scope runtimeClasspath
 ```
 
 ### AI agent / script integration
 
 ```bash
 # All commands support --agentic for structured JSON output
-classpath-surfer search ImmutableList --agentic
+classpath-surfer search symbol ImmutableList --agentic
 classpath-surfer show com.google.common.collect.ImmutableList --agentic
 
 # Non-TTY automatically outputs plain text (pipe-friendly)
-classpath-surfer search ImmutableList | head
+classpath-surfer search symbol ImmutableList | head
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `init` | Install Gradle init script, default config, and run initial refresh |
-| `refresh` | Extract classpath via Gradle and build/update the symbol index (skips Gradle when fresh; use `--force` to override) |
-| `search <query>` | Search for symbols in the index |
+| `search symbol <query>` | Search for symbols in the index |
+| `search dep [pattern]` | List indexed dependencies with symbol counts |
+| `search pkg [pattern]` | List indexed Java packages |
 | `show <fqn>` | Display source code for a symbol (focuses on the target symbol by default) |
-| `deps` | List indexed dependencies with symbol counts |
-| `status` | Show index stats (dependency count, symbol count, staleness, disk size) |
-| `clean` | Remove index data |
+| `index init` | Install Gradle init script, default config, and run initial refresh |
+| `index refresh` | Extract classpath via Gradle and build/update the symbol index (skips Gradle when fresh; use `--force` to override) |
+| `index status` | Show index stats (dependency count, symbol count, staleness, disk size) |
+| `index clean` | Remove index data |
 | `--agentic` | Global flag: emit structured JSON output for AI agents and scripts |
 
 ## Performance
@@ -193,7 +194,7 @@ graph TD
 2. **Parse** — Each JAR is opened with the `cafebabe` crate. Every `.class` file is parsed to extract class names, methods, fields, descriptors, and access flags. For Kotlin classes, the `@kotlin.Metadata` annotation is decoded via protobuf (prost) to produce Kotlin-native signatures. The `SourceFile` attribute is used to detect the source language.
 3. **Index** — Extracted symbols are written into a Tantivy index with fields for FQN, simple name, camelCase-split tokens, kind, signature, and GAV.
 4. **Search** — Queries hit the Tantivy index. Results are ranked by relevance and returned as a table or JSON.
-5. **Staleness** — On each search, the tool checks lockfile hashes and build-file mtimes against the snapshot taken at index time. If anything changed, it asks you to `refresh`.
+5. **Staleness** — On each search, the tool checks lockfile hashes and build-file mtimes against the snapshot taken at index time. If anything changed, it asks you to `index refresh`.
 
 ## Claude Code Integration
 
@@ -217,7 +218,7 @@ This lets Claude Code discover and read dependency APIs without you having to lo
 
 ## Configuration
 
-`classpath-surfer init` writes `.classpath-surfer/config.json`:
+`classpath-surfer index init` writes `.classpath-surfer/config.json`:
 
 ```json
 {
