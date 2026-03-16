@@ -164,10 +164,10 @@ pub fn run(project_dir: &Path, config: &BrowserConfig) -> Result<()> {
             } else {
                 // Browser navigation
                 match key.code {
-                    KeyCode::Char('q') => break,
-                    KeyCode::Esc | KeyCode::Left | KeyCode::Char('h') => {
+                    KeyCode::Char('q') | KeyCode::Esc => break,
+                    KeyCode::Left | KeyCode::Char('h') => {
                         match state.focus {
-                            ColumnFocus::Dep => break, // quit
+                            ColumnFocus::Dep => {} // leftmost column — do nothing
                             ColumnFocus::Pkg => {
                                 state.focus = ColumnFocus::Dep;
                             }
@@ -568,12 +568,16 @@ fn render_browser(frame: &mut Frame, area: Rect, state: &mut BrowserState, confi
         return;
     }
 
+    // Compute detail panel height: content lines + 2 (borders) + 1 (inner padding)
+    let detail_content_lines = detail_line_count(state);
+    let detail_height = (detail_content_lines as u16) + 3; // borders(2) + bottom padding(1)
+
     // Split: 3 columns + detail + hint bar
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(5),
-            Constraint::Length(5),
+            Constraint::Length(detail_height),
             Constraint::Length(1),
         ])
         .split(area);
@@ -603,7 +607,7 @@ fn render_browser(frame: &mut Frame, area: Rect, state: &mut BrowserState, confi
     let hint_text = if let Some(ref err) = state.error_message {
         Line::from(format!(" Error: {err} ")).style(Style::default().fg(Color::Red))
     } else {
-        Line::from(" ←→ columns | ↑↓ navigate | Enter show source | q quit ")
+        Line::from(" ←→ columns | ↑↓ navigate | Enter show source | Esc/q quit ")
             .style(Style::default().dim())
     };
     frame.render_widget(hint_text, hint_area);
@@ -797,11 +801,11 @@ fn render_symbols_column(
     frame.render_stateful_widget(table, area, &mut state.symbol_state);
 }
 
-/// Render the detail panel for the currently focused item.
-fn render_detail_panel(frame: &mut Frame, area: Rect, state: &BrowserState) {
+/// Build detail lines for the currently focused item.
+fn build_detail_lines(state: &BrowserState) -> Vec<Line<'static>> {
     let label_style = Style::default().fg(Color::DarkGray);
 
-    let lines: Vec<Line> = match state.focus {
+    match state.focus {
         ColumnFocus::Dep => {
             let dep_idx = state.dep_state.selected().unwrap_or(0);
             if let Some(dep) = state.deps.get(dep_idx) {
@@ -846,26 +850,79 @@ fn render_detail_panel(frame: &mut Frame, area: Rect, state: &BrowserState) {
                     Style::default().bold(),
                 ))];
                 lines.push(Line::from(vec![
-                    Span::styled("Signature: ", label_style),
-                    Span::raw(
-                        result
-                            .signature
-                            .kotlin
-                            .clone()
-                            .unwrap_or_else(|| result.signature.java.clone()),
-                    ),
+                    Span::styled("Signature(Java): ", label_style),
+                    Span::raw(result.signature.java.clone()),
                 ]));
+                if let Some(ref kt_sig) = result.signature.kotlin {
+                    lines.push(Line::from(vec![
+                        Span::styled("Signature(Kotlin): ", label_style),
+                        Span::raw(kt_sig.clone()),
+                    ]));
+                }
                 lines.push(Line::from(vec![
                     Span::styled("Dep: ", label_style),
                     Span::raw(result.gav.clone()),
                 ]));
+                if !result.classpaths.is_empty() {
+                    lines.push(Line::from(vec![
+                        Span::styled("Classpath: ", label_style),
+                        Span::raw(result.classpaths.join(", ")),
+                    ]));
+                }
                 lines
             } else {
                 vec![]
             }
         }
-    };
+    }
+}
 
+/// Count detail content lines for layout sizing.
+fn detail_line_count(state: &BrowserState) -> usize {
+    match state.focus {
+        ColumnFocus::Dep => {
+            let dep_idx = state.dep_state.selected().unwrap_or(0);
+            state
+                .deps
+                .get(dep_idx)
+                .map(|dep| if dep.classpaths.is_empty() { 2 } else { 3 })
+                .unwrap_or(0)
+        }
+        ColumnFocus::Pkg => {
+            if state
+                .pkg_state
+                .selected()
+                .and_then(|i| state.packages.get(i))
+                .is_some()
+            {
+                2
+            } else {
+                0
+            }
+        }
+        ColumnFocus::Symbol => {
+            let sym_idx = state.symbol_state.selected().unwrap_or(0);
+            state
+                .symbols
+                .get(sym_idx)
+                .map(|r| {
+                    let mut n = 3; // fqn + java sig + dep
+                    if r.signature.kotlin.is_some() {
+                        n += 1;
+                    }
+                    if !r.classpaths.is_empty() {
+                        n += 1;
+                    }
+                    n
+                })
+                .unwrap_or(0)
+        }
+    }
+}
+
+/// Render the detail panel for the currently focused item.
+fn render_detail_panel(frame: &mut Frame, area: Rect, state: &BrowserState) {
+    let lines = build_detail_lines(state);
     let block = Block::default().borders(Borders::ALL);
     let detail = Paragraph::new(Text::from(lines)).block(block);
     frame.render_widget(detail, area);
