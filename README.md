@@ -50,6 +50,12 @@ Coding agents (like Claude Code) working on Gradle Java/Kotlin projects repeated
 brew install rscarrera27/tap/classpath-surfer
 ```
 
+The binary is also installed as **`cpsurf`** — a short alias you can use anywhere in place of `classpath-surfer`:
+
+```bash
+cpsurf search symbol ImmutableList   # same as: classpath-surfer search symbol ImmutableList
+```
+
 ### Set up a project
 
 ```bash
@@ -159,25 +165,25 @@ classpath-surfer search symbol ImmutableList | head
 
 ## Performance
 
-Benchmarked on Macbook Pro 2023(M2 Pro, 32GB) with a 38-dependency project (77,219 symbols including Guava, Spring Core, Ktor, kotlinx-coroutines, OkHttp, and more):
+Benchmarked on Macbook Pro 2023(M2 Pro, 32GB) with a 42-dependency project (156,116 symbols including Guava, Spring Core, Ktor, kotlinx-coroutines, OkHttp, and more):
 
 ### Search latency
 
 | Query type | Latency |
 |-----------|---------|
-| Simple keyword (`ImmutableList`) | **83 µs** |
-| FQN exact match | **10 µs** |
-| Regex (`Immutable.*`) | **350 µs** |
-| With type filter | **73 µs** |
-| With dependency filter | **92 µs** |
+| Simple keyword (`ImmutableList`) | **872 µs** |
+| FQN exact match | **14 µs** |
+| Glob (`Immutable*`) | **476 µs** |
+| With type filter | **848 µs** |
+| With dependency filter | **873 µs** |
 
 ### Indexing speed
 
 | Operation | Time |
 |-----------|------|
-| Full refresh (38 deps, 77K symbols) | **1.76 s** |
-| Incremental refresh (1 dep removed) | **607 ms** |
-| No-op refresh (up to date) | **537 ms** |
+| Full refresh (42 deps, 156K symbols) | **2.72 s** |
+| Incremental refresh (1 dep removed) | **677 ms** |
+| No-op refresh (up to date) | **180 µs** |
 
 <details>
 <summary>Reproduce these benchmarks</summary>
@@ -220,7 +226,7 @@ classpath-surfer ships as a [Claude Code plugin](https://claude.ai/claude-code) 
 |-------|-------|
 | `/search-classpath <query>` | Search for symbols, dependencies, or packages |
 | `/show-classpath-source <fqn>` | Show source code for a fully qualified symbol |
-| `/classpath-index [action]` | Manage the symbol index (init, refresh, status, clean, diagnose) |
+| `/classpath-index [action]` | Manage the symbol index (init, refresh, status, clean) |
 
 ### Install the plugin
 
@@ -241,8 +247,8 @@ This lets Claude Code discover and read dependency APIs without you having to lo
   "decompiler": "cfr",
   "decompiler_jar": null,
   "configurations": ["compileClasspath", "runtimeClasspath"],
-  "java_home": null,
-  "no_decompile": false
+  "no_decompile": false,
+  "gradle_timeout": null
 }
 ```
 
@@ -251,8 +257,8 @@ This lets Claude Code discover and read dependency APIs without you having to lo
 | `decompiler` | `"cfr"` or `"vineflower"` |
 | `decompiler_jar` | Explicit path to the decompiler JAR. If unset, reads `CFR_JAR` or `VINEFLOWER_JAR` env var |
 | `configurations` | Gradle configurations to resolve |
-| `java_home` | Override `JAVA_HOME` (used to run the decompiler) |
 | `no_decompile` | `false` (default). When `true`, fail instead of decompiling if no source JAR |
+| `gradle_timeout` | Gradle execution timeout in seconds. Default: 300 (5 minutes). Also settable via `--timeout` |
 
 CLI flags (`--decompiler`, `--configurations`, `--no-decompile`) override config file values when provided.
 
