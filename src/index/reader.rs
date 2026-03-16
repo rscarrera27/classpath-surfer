@@ -375,6 +375,48 @@ impl IndexReader {
         Ok((results, matched_gavs))
     }
 
+    /// List unique packages for a specific set of GAV strings.
+    ///
+    /// Builds a single boolean OR query from the GAV list and aggregates
+    /// packages with their symbol counts. Returns `(packages, matched_gavs)`.
+    pub fn list_packages_for_gavs(&self, gavs: &[&str]) -> Result<PackagesWithGavs> {
+        if gavs.is_empty() {
+            return Ok((vec![], vec![]));
+        }
+
+        let schema = self.index.schema();
+        let searcher = self.reader.searcher();
+        let gav_field = schema.get_field("gav").unwrap();
+        let pkg_field = schema.get_field("package").unwrap();
+
+        let clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = gavs
+            .iter()
+            .map(|gav| {
+                let term = tantivy::Term::from_field_text(gav_field, gav);
+                (
+                    Occur::Should,
+                    Box::new(TermQuery::new(term, IndexRecordOption::Basic))
+                        as Box<dyn tantivy::query::Query>,
+                )
+            })
+            .collect();
+
+        let query = BooleanQuery::new(clauses);
+        let total = searcher.search(&query, &Count)?;
+        let top_docs = searcher.search(&query, &TopDocs::with_limit(total))?;
+
+        let mut pkg_counts: BTreeMap<String, usize> = BTreeMap::new();
+        for (_score, addr) in top_docs {
+            let doc: tantivy::TantivyDocument = searcher.doc(addr)?;
+            if let Some(pkg_val) = doc.get_first(pkg_field).and_then(|v| v.as_str()) {
+                *pkg_counts.entry(pkg_val.to_string()).or_insert(0) += 1;
+            }
+        }
+
+        let results: Vec<(String, usize)> = pkg_counts.into_iter().collect();
+        Ok((results, gavs.iter().map(|s| s.to_string()).collect()))
+    }
+
     /// List all unique GAVs in the index with their symbol counts.
     ///
     /// Iterates the term dictionary of the `gav` field across all segments,

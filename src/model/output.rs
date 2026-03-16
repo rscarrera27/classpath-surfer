@@ -201,6 +201,9 @@ pub struct PkgsOutput {
     /// GAV pattern used to restrict to specific dependencies.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependency: Option<String>,
+    /// Configuration scope used to filter dependencies.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
     /// GAVs that matched the dependency pattern.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matched_gavs: Option<Vec<String>>,

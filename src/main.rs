@@ -44,13 +44,43 @@ struct Cli {
 /// Shared pagination arguments for commands that return lists.
 #[derive(Args)]
 struct Pagination {
-    /// Maximum number of results
-    #[arg(long, default_value_t = 50)]
-    limit: usize,
+    /// Maximum number of results (default: 20 for agentic/plain, 50 for TUI)
+    #[arg(long)]
+    limit: Option<usize>,
 
     /// Number of results to skip (for pagination)
     #[arg(long, default_value_t = 0)]
     offset: usize,
+}
+
+impl Pagination {
+    /// Resolve the effective limit based on the output mode.
+    ///
+    /// If `--limit` was explicitly provided, use that value.
+    /// Otherwise default to 50 for TUI (interactive browsing) and 20 for
+    /// agentic/plain (context-window-friendly).
+    fn effective_limit(&self, mode: OutputMode) -> usize {
+        self.limit.unwrap_or(match mode {
+            OutputMode::Tui => 50,
+            _ => 20,
+        })
+    }
+}
+
+/// Shared scope filter for commands that support configuration scope restriction.
+#[derive(Args)]
+struct ScopeFilter {
+    /// Filter by configuration scope (e.g., compileClasspath, runtimeClasspath)
+    #[arg(long)]
+    scope: Option<String>,
+}
+
+/// Shared dependency filter for commands that support GAV pattern restriction.
+#[derive(Args)]
+struct DependencyFilter {
+    /// Restrict to dependencies matching a GAV pattern (e.g., "com.google.*:guava:*")
+    #[arg(long)]
+    dependency: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -130,29 +160,22 @@ EXAMPLES:
         #[arg(long, value_delimiter = ',')]
         r#type: Vec<SymbolKind>,
 
-        /// Maximum number of results (default: 20 for agentic/plain, 50 for TUI)
-        #[arg(long)]
-        limit: Option<usize>,
-
-        /// Number of results to skip (for pagination)
-        #[arg(long, default_value_t = 0)]
-        offset: usize,
-
-        /// Restrict search to dependencies matching a GAV pattern (e.g., "com.google.*:guava:*")
-        #[arg(long)]
-        dependency: Option<String>,
-
         /// Filter by access level (comma-separated)
         #[arg(long, value_delimiter = ',', default_values_t = vec![AccessLevel::Public])]
         access: Vec<AccessLevel>,
 
-        /// Filter by configuration scope (e.g., compileClasspath, runtimeClasspath)
-        #[arg(long)]
-        scope: Option<String>,
-
         /// Filter by Java package pattern (glob supported, e.g., "com.google.common.*")
         #[arg(long)]
         package: Option<String>,
+
+        #[command(flatten)]
+        pagination: Pagination,
+
+        #[command(flatten)]
+        scope_filter: ScopeFilter,
+
+        #[command(flatten)]
+        dep_filter: DependencyFilter,
     },
 
     /// List indexed dependencies with symbol counts
@@ -171,12 +194,11 @@ EXAMPLES:
         /// Filter dependencies by GAV pattern (e.g., "com.google.*:*")
         query: Option<String>,
 
-        /// Filter by configuration scope (e.g., compileClasspath, runtimeClasspath)
-        #[arg(long)]
-        scope: Option<String>,
-
         #[command(flatten)]
         pagination: Pagination,
+
+        #[command(flatten)]
+        scope_filter: ScopeFilter,
     },
 
     /// List unique Java packages with symbol counts
@@ -188,19 +210,22 @@ EXAMPLES:
 EXAMPLES:
   classpath-surfer search pkg
   classpath-surfer search pkg 'com.google.*'
-  classpath-surfer search pkg --lib 'com.google.*:guava:*'
+  classpath-surfer search pkg --dependency 'com.google.*:guava:*'
+  classpath-surfer search pkg --scope compileClasspath
   classpath-surfer search pkg --limit 10 --offset 20"
     )]
     Pkg {
         /// Filter packages by pattern (e.g., "com.google.*")
         query: Option<String>,
 
-        /// Restrict to dependencies matching a GAV pattern (e.g., "com.google.*:guava:*")
-        #[arg(long)]
-        dependency: Option<String>,
-
         #[command(flatten)]
         pagination: Pagination,
+
+        #[command(flatten)]
+        scope_filter: ScopeFilter,
+
+        #[command(flatten)]
+        dep_filter: DependencyFilter,
     },
 }
 
@@ -301,15 +326,13 @@ fn main() {
             SearchCommands::Symbol {
                 query,
                 r#type,
-                limit,
-                offset,
                 access,
-                dependency,
-                scope,
                 package,
+                pagination,
+                scope_filter,
+                dep_filter,
             } => {
-                // Validate: at least one of query, dependency, or package must be provided
-                if query.is_none() && dependency.is_none() && package.is_none() {
+                if query.is_none() && dep_filter.dependency.is_none() && package.is_none() {
                     let err: anyhow::Error = CliError::usage(
                         "MISSING_QUERY",
                         "Either a search query, --dependency, or --package must be provided.",
@@ -329,32 +352,31 @@ fn main() {
                     access
                 };
                 let is_listing = query.is_none();
+                let effective_limit = pagination.effective_limit(output_mode);
 
                 if output_mode == OutputMode::Tui {
-                    let effective_limit = limit.unwrap_or(50);
                     let sq = SearchQuery {
                         query: query.as_deref(),
                         symbol_types: &r#type,
                         limit: effective_limit,
-                        dependency: dependency.as_deref(),
+                        dependency: dep_filter.dependency.as_deref(),
                         access_levels: &access_levels,
                         offset: 0,
-                        scope: scope.as_deref(),
+                        scope: scope_filter.scope.as_deref(),
                         package: package.as_deref(),
                     };
                     cli::require_index(&project_dir).and_then(|()| {
                         classpath_surfer::tui::search::run_interactive(&project_dir, &sq)
                     })
                 } else {
-                    let effective_limit = limit.unwrap_or(20);
                     let sq = SearchQuery {
                         query: query.as_deref(),
                         symbol_types: &r#type,
                         limit: effective_limit,
-                        dependency: dependency.as_deref(),
+                        dependency: dep_filter.dependency.as_deref(),
                         access_levels: &access_levels,
-                        offset,
-                        scope: scope.as_deref(),
+                        offset: pagination.offset,
+                        scope: scope_filter.scope.as_deref(),
                         package: package.as_deref(),
                     };
                     let plain_renderer = if is_listing {
@@ -372,15 +394,16 @@ fn main() {
             }
             SearchCommands::Dep {
                 query,
-                scope,
                 pagination,
+                scope_filter,
             } => {
+                let effective_limit = pagination.effective_limit(output_mode);
                 if output_mode == OutputMode::Tui {
                     cli::require_index(&project_dir).and_then(|()| {
                         classpath_surfer::tui::deps::run(
                             &project_dir,
                             query.as_deref(),
-                            scope.as_deref(),
+                            scope_filter.scope.as_deref(),
                         )
                     })
                 } else {
@@ -389,8 +412,8 @@ fn main() {
                         cli::deps::run(
                             &project_dir,
                             query.as_deref(),
-                            scope.as_deref(),
-                            pagination.limit,
+                            scope_filter.scope.as_deref(),
+                            effective_limit,
                             pagination.offset,
                         ),
                         cli::render::deps,
@@ -400,20 +423,25 @@ fn main() {
             }
             SearchCommands::Pkg {
                 query,
-                dependency,
                 pagination,
-            } => render(
-                output_mode,
-                cli::pkgs::run(
-                    &project_dir,
-                    query.as_deref(),
-                    dependency.as_deref(),
-                    pagination.limit,
-                    pagination.offset,
-                ),
-                cli::render::pkgs,
-                None::<fn(&_) -> anyhow::Result<()>>,
-            ),
+                scope_filter,
+                dep_filter,
+            } => {
+                let effective_limit = pagination.effective_limit(output_mode);
+                render(
+                    output_mode,
+                    cli::pkgs::run(
+                        &project_dir,
+                        query.as_deref(),
+                        dep_filter.dependency.as_deref(),
+                        scope_filter.scope.as_deref(),
+                        effective_limit,
+                        pagination.offset,
+                    ),
+                    cli::render::pkgs,
+                    None::<fn(&_) -> anyhow::Result<()>>,
+                )
+            }
         },
         Commands::Show {
             fqn,
