@@ -211,6 +211,66 @@ pub fn glob_to_tantivy_regex(pattern: &str) -> String {
     escaped.replace(r"\*", ".*").replace(r"\?", ".")
 }
 
+/// Shape of a glob pattern based on wildcard positions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlobShape {
+    /// Glob characters only at the end (e.g., `Foo*`, `com.google.*`).
+    Prefix,
+    /// Glob characters only at the start (e.g., `*List`, `*.collect`).
+    Suffix,
+    /// Glob characters in multiple positions or interior (e.g., `*Foo*`, `F*o`).
+    Mixed,
+}
+
+/// Classify a glob pattern by the position of its wildcard characters.
+///
+/// Only meaningful when the pattern contains at least one `*` or `?`.
+///
+/// ```
+/// use classpath_surfer::model::{GlobShape, classify_glob};
+/// assert_eq!(classify_glob("Foo*"), GlobShape::Prefix);
+/// assert_eq!(classify_glob("*List"), GlobShape::Suffix);
+/// assert_eq!(classify_glob("*Foo*"), GlobShape::Mixed);
+/// ```
+pub fn classify_glob(pattern: &str) -> GlobShape {
+    let chars: Vec<char> = pattern.chars().collect();
+    let first_literal = chars.iter().position(|c| *c != '*' && *c != '?');
+    let last_literal = chars.iter().rposition(|c| *c != '*' && *c != '?');
+    let first_glob = chars.iter().position(|c| *c == '*' || *c == '?');
+    let last_glob = chars.iter().rposition(|c| *c == '*' || *c == '?');
+
+    match (first_literal, last_literal, first_glob, last_glob) {
+        (Some(fl), Some(ll), Some(fg), Some(lg)) => {
+            if fg > ll {
+                // All globs come after all literals: Foo*, com.google.*
+                GlobShape::Prefix
+            } else if lg < fl {
+                // All globs come before all literals: *List, *.collect
+                GlobShape::Suffix
+            } else {
+                // Globs and literals are interleaved: *Foo*, F*o, *Foo?
+                GlobShape::Mixed
+            }
+        }
+        // All globs, no literals (e.g., "*", "**", "*?")
+        (None, None, Some(_), Some(_)) => GlobShape::Suffix,
+        _ => GlobShape::Mixed,
+    }
+}
+
+/// Reverse a string by Unicode code points.
+///
+/// Sufficient for JVM identifiers which consist of BMP characters
+/// without combining marks.
+///
+/// ```
+/// use classpath_surfer::model::reverse_str;
+/// assert_eq!(reverse_str("Hello"), "olleH");
+/// ```
+pub fn reverse_str(s: &str) -> String {
+    s.chars().rev().collect()
+}
+
 /// Format a source language string (lowercase) into a capitalized display name.
 ///
 /// Returns `"Java"` for unrecognized or missing language identifiers.

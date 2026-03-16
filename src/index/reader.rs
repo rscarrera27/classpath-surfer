@@ -9,8 +9,8 @@ use tantivy::{Index, ReloadPolicy};
 
 use crate::error::CliError;
 use crate::model::{
-    AccessLevel, SearchQuery, SearchResult, SignatureDisplay, SourceLanguage, SymbolKind,
-    glob_to_tantivy_regex, matches_glob_pattern,
+    AccessLevel, GlobShape, SearchQuery, SearchResult, SignatureDisplay, SourceLanguage,
+    SymbolKind, classify_glob, glob_to_tantivy_regex, matches_glob_pattern,
 };
 
 /// Result of GAV filter construction: the Tantivy query clause (if any) and matched GAVs.
@@ -37,21 +37,7 @@ impl IndexReader {
 
         // Validate schema compatibility
         let schema = index.schema();
-        let required_fields = [
-            "gav",
-            "symbol_kind",
-            "fqn",
-            "simple_name",
-            "name_parts",
-            "signature_java",
-            "signature_kotlin",
-            "access_flags",
-            "access_level",
-            "source",
-            "source_language",
-            "classpaths",
-        ];
-        let missing: Vec<&str> = required_fields
+        let missing: Vec<&str> = super::compat::REQUIRED_FIELDS
             .iter()
             .filter(|&&name| schema.get_field(name).is_err())
             .copied()
@@ -259,50 +245,35 @@ impl IndexReader {
 
     /// Build a package filter query from a package pattern.
     ///
-    /// Returns `None` when a glob pattern matches zero packages (caller should
-    /// short-circuit with no results).
+    /// - Exact match (no glob) → `TermQuery` on `package`.
+    /// - Suffix glob (`*.collect`) → `RegexQuery` on `package_rev` (reversed prefix).
+    /// - Prefix/mixed glob → `RegexQuery` on `package` (FST automata).
     fn build_package_filter(
         &self,
         schema: &Schema,
         pattern: &str,
     ) -> Result<Option<Box<dyn tantivy::query::Query>>> {
-        let pkg_field = schema.get_field("package").unwrap();
-        if pattern.contains('*') || pattern.contains('?') {
-            let searcher = self.reader.searcher();
-            let mut pkg_set: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-            for segment_reader in searcher.segment_readers() {
-                let inverted_index = segment_reader.inverted_index(pkg_field)?;
-                let mut term_stream = inverted_index.terms().stream()?;
-                while term_stream.advance() {
-                    let term_bytes = term_stream.key();
-                    if let Ok(term_str) = std::str::from_utf8(term_bytes)
-                        && matches_glob_pattern(term_str, pattern)
-                    {
-                        pkg_set.insert(term_str.to_string());
-                    }
-                }
-            }
-            if pkg_set.is_empty() {
-                return Ok(None);
-            }
-            let pkg_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = pkg_set
-                .into_iter()
-                .map(|p| {
-                    (
-                        Occur::Should,
-                        Box::new(TermQuery::new(
-                            tantivy::Term::from_field_text(pkg_field, &p),
-                            IndexRecordOption::Basic,
-                        )) as Box<dyn tantivy::query::Query>,
-                    )
-                })
-                .collect();
-            Ok(Some(Box::new(BooleanQuery::new(pkg_clauses))))
-        } else {
-            Ok(Some(Box::new(TermQuery::new(
+        if !pattern.contains('*') && !pattern.contains('?') {
+            // Exact match
+            let pkg_field = schema.get_field("package").unwrap();
+            return Ok(Some(Box::new(TermQuery::new(
                 tantivy::Term::from_field_text(pkg_field, pattern),
                 IndexRecordOption::Basic,
-            ))))
+            ))));
+        }
+
+        match classify_glob(pattern) {
+            GlobShape::Suffix => {
+                let rev_field = schema.get_field("package_rev").unwrap();
+                let regex = reverse_suffix_to_regex(pattern, false);
+                Ok(Some(Box::new(RegexQuery::from_pattern(&regex, rev_field)?)))
+            }
+            _ => {
+                // Prefix or mixed — use RegexQuery on the forward package field
+                let pkg_field = schema.get_field("package").unwrap();
+                let regex = glob_to_tantivy_regex(pattern);
+                Ok(Some(Box::new(RegexQuery::from_pattern(&regex, pkg_field)?)))
+            }
         }
     }
 
@@ -485,12 +456,21 @@ fn build_base_query(
     }
 
     if has_glob {
-        // Glob on simple_name (lowercase)
-        let simple_name_field = schema.get_field("simple_name").unwrap();
-        return Ok(Box::new(RegexQuery::from_pattern(
-            &glob_to_tantivy_regex(&query_str.to_lowercase()),
-            simple_name_field,
-        )?));
+        // Glob on simple_name — route suffix patterns to reversed field
+        match classify_glob(query_str) {
+            GlobShape::Suffix => {
+                let rev_field = schema.get_field("simple_name_rev").unwrap();
+                let regex = reverse_suffix_to_regex(query_str, true);
+                return Ok(Box::new(RegexQuery::from_pattern(&regex, rev_field)?));
+            }
+            _ => {
+                let simple_name_field = schema.get_field("simple_name").unwrap();
+                return Ok(Box::new(RegexQuery::from_pattern(
+                    &glob_to_tantivy_regex(&query_str.to_lowercase()),
+                    simple_name_field,
+                )?));
+            }
+        }
     }
 
     // Auto-detect FQN exact match (2+ dots)
@@ -662,6 +642,35 @@ fn doc_to_search_result(schema: &Schema, doc: &tantivy::TantivyDocument) -> Sear
         source_language,
         classpaths,
     }
+}
+
+/// Build a Tantivy regex for the reversed field from a suffix glob pattern.
+///
+/// Algorithm:
+/// 1. Strip leading glob characters (`*`/`?`) to get the literal suffix
+/// 2. Optionally lowercase the literal (for tokenized TEXT fields)
+/// 3. Reverse the literal
+/// 4. Append the stripped glob characters (reversed) as trailing wildcards
+/// 5. Convert to Tantivy regex via `glob_to_tantivy_regex`
+fn reverse_suffix_to_regex(pattern: &str, lowercase: bool) -> String {
+    // Split: leading globs | literal suffix
+    let first_literal = pattern
+        .find(|c: char| c != '*' && c != '?')
+        .unwrap_or(pattern.len());
+    let glob_prefix = &pattern[..first_literal];
+    let literal = &pattern[first_literal..];
+
+    let literal = if lowercase {
+        literal.to_lowercase()
+    } else {
+        literal.to_string()
+    };
+
+    let reversed_literal: String = literal.chars().rev().collect();
+    // Trailing wildcard: reverse the glob prefix chars so "*?" becomes "?*"
+    let trailing_glob: String = glob_prefix.chars().rev().collect();
+
+    glob_to_tantivy_regex(&format!("{reversed_literal}{trailing_glob}"))
 }
 
 /// Escape regex special characters in a search term for use in [`RegexQuery`].

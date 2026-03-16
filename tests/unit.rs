@@ -262,6 +262,48 @@ fn glob_pattern_question_mark() {
     ));
 }
 
+use classpath_surfer::model::{GlobShape, classify_glob, reverse_str};
+
+// ---------------------------------------------------------------------------
+// Glob shape classification
+// ---------------------------------------------------------------------------
+
+#[test]
+fn classify_glob_prefix() {
+    assert_eq!(classify_glob("Foo*"), GlobShape::Prefix);
+    assert_eq!(classify_glob("com.google.*"), GlobShape::Prefix);
+    assert_eq!(classify_glob("Foo?"), GlobShape::Prefix);
+    assert_eq!(classify_glob("Foo*?"), GlobShape::Prefix);
+}
+
+#[test]
+fn classify_glob_suffix() {
+    assert_eq!(classify_glob("*List"), GlobShape::Suffix);
+    assert_eq!(classify_glob("*.collect"), GlobShape::Suffix);
+    assert_eq!(classify_glob("?Foo"), GlobShape::Suffix);
+    assert_eq!(classify_glob("*"), GlobShape::Suffix);
+    assert_eq!(classify_glob("*?Foo"), GlobShape::Suffix);
+}
+
+#[test]
+fn classify_glob_mixed() {
+    assert_eq!(classify_glob("*Foo*"), GlobShape::Mixed);
+    assert_eq!(classify_glob("F*o"), GlobShape::Mixed);
+    assert_eq!(classify_glob("*Foo?"), GlobShape::Mixed);
+    assert_eq!(classify_glob("F*o*"), GlobShape::Mixed);
+}
+
+#[test]
+fn reverse_str_basic() {
+    assert_eq!(reverse_str("ImmutableList"), "tsiLelbatummI");
+    assert_eq!(
+        reverse_str("com.google.common.collect"),
+        "tcelloc.nommoc.elgoog.moc"
+    );
+    assert_eq!(reverse_str(""), "");
+    assert_eq!(reverse_str("A"), "A");
+}
+
 // ---------------------------------------------------------------------------
 // Error case tests (no JDK required)
 // ---------------------------------------------------------------------------
@@ -544,4 +586,25 @@ fn overflow_indicator_has_more_below() {
     // Check the "..." text is at the expected position
     let cell = &buf[(inner.x + 3, y)];
     assert_eq!(cell.symbol(), ".");
+}
+
+#[test]
+fn suffix_glob_reversed_regex_construction() {
+    use classpath_surfer::model::glob_to_tantivy_regex;
+
+    // Simulate the reverse_suffix_to_regex algorithm for simple_name (lowercase=true)
+    // *List → strip "*" → "List" → lowercase → "list" → reverse → "tsil" → append "*" → "tsil*"
+    let regex = glob_to_tantivy_regex("tsil*");
+    assert!(regex::Regex::new(&regex).unwrap().is_match("tsilelbatummi"));
+    assert!(!regex::Regex::new(&regex).unwrap().is_match("xyzabc"));
+
+    // Simulate for package (lowercase=false)
+    // *.collect → strip "*" → ".collect" → reverse → "tcelloc." → append "*" → "tcelloc.*"
+    let regex = glob_to_tantivy_regex("tcelloc.*");
+    assert!(
+        regex::Regex::new(&regex)
+            .unwrap()
+            .is_match("tcelloc.nommoc.elgoog.moc")
+    );
+    assert!(!regex::Regex::new(&regex).unwrap().is_match("gnirts.modnar"));
 }

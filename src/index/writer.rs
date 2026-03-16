@@ -49,6 +49,10 @@ pub struct SchemaFields {
     pub simple_name: Field,
     /// CamelCase-split tokens for search.
     pub name_parts: Field,
+    /// Reversed simple name for suffix glob acceleration.
+    pub simple_name_rev: Field,
+    /// Reversed package name for suffix glob acceleration.
+    pub package_rev: Field,
     /// Raw JVM descriptor field.
     pub descriptor: Field,
     /// Java-style signature field.
@@ -86,6 +90,8 @@ impl SchemaFields {
             class_name: schema.get_field("class_name").unwrap(),
             simple_name: schema.get_field("simple_name").unwrap(),
             name_parts: schema.get_field("name_parts").unwrap(),
+            simple_name_rev: schema.get_field("simple_name_rev").unwrap(),
+            package_rev: schema.get_field("package_rev").unwrap(),
             descriptor: schema.get_field("descriptor").unwrap(),
             signature_java: schema.get_field("signature_java").unwrap(),
             signature_kotlin: schema.get_field("signature_kotlin").unwrap(),
@@ -162,21 +168,9 @@ pub fn is_index_schema_current(index_dir: &Path) -> bool {
 
 /// Check whether the existing index schema contains all required fields.
 fn is_schema_compatible(schema: &Schema) -> bool {
-    let required = [
-        "gav",
-        "symbol_kind",
-        "fqn",
-        "simple_name",
-        "name_parts",
-        "signature_java",
-        "signature_kotlin",
-        "access_flags",
-        "access_level",
-        "source",
-        "source_language",
-        "classpaths",
-    ];
-    required.iter().all(|&name| schema.get_field(name).is_ok())
+    super::compat::REQUIRED_FIELDS
+        .iter()
+        .all(|&name| schema.get_field(name).is_ok())
 }
 
 /// Delete all documents for a given GAV from the index.
@@ -258,6 +252,8 @@ fn add_symbol_doc(
         f.class_name => doc_data.class_name.as_str(),
         f.simple_name => doc_data.simple_name.as_str(),
         f.name_parts => doc_data.name_parts.as_str(),
+        f.simple_name_rev => crate::model::reverse_str(&doc_data.simple_name),
+        f.package_rev => crate::model::reverse_str(&doc_data.package),
         f.descriptor => doc_data.descriptor.as_str(),
         f.signature_java => doc_data.signature.java.as_str(),
         f.signature_kotlin => doc_data.signature.kotlin.as_deref().unwrap_or(""),

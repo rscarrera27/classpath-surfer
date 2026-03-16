@@ -1058,3 +1058,99 @@ fn search_package_no_match() {
     assert_eq!(count, 0, "non-existent package should return 0 results");
     assert!(results.is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// Glob search: suffix glob, prefix glob regression
+// ---------------------------------------------------------------------------
+
+#[test]
+fn search_suffix_glob_simple_name() {
+    let project = require_indexed_project!();
+    let reader = IndexReader::open(&project.index_dir()).unwrap();
+
+    // *List should match classes where any name component ends in "list"
+    // (e.g., ImmutableList, ArrayList, as well as inner classes whose outer
+    // name ends in "List").  The simple_name field is tokenized, so the
+    // regex runs per-token on the reversed field.
+    let (results, count, _) = reader
+        .search(&SearchQuery {
+            limit: 50,
+            ..SearchQuery::with_types("*List", &[SymbolKind::Class])
+        })
+        .unwrap();
+
+    assert!(count > 0, "suffix glob *List should match some classes");
+    assert!(
+        results.iter().all(|r| {
+            r.simple_name
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|part| part.to_lowercase().ends_with("list"))
+        }),
+        "all results should have a name component ending with 'list', got: {:?}",
+        results.iter().map(|r| &r.simple_name).collect::<Vec<_>>()
+    );
+    // Verify known expected match is present
+    assert!(
+        results
+            .iter()
+            .any(|r| r.simple_name.to_lowercase().ends_with("list")),
+        "at least one result should have simple_name ending with 'list'"
+    );
+}
+
+#[test]
+fn search_suffix_glob_package_filter() {
+    let project = require_indexed_project!();
+    let reader = IndexReader::open(&project.index_dir()).unwrap();
+
+    // *.collect should match packages ending in ".collect"
+    let (results, count, _) = reader
+        .search(&SearchQuery {
+            limit: 50,
+            package: Some("*.collect"),
+            ..SearchQuery::with_types("Immutable", &[SymbolKind::Class])
+        })
+        .unwrap();
+
+    assert!(count > 0, "suffix package glob *.collect should match");
+    assert!(
+        results.iter().all(|r| r.fqn.contains(".collect.")),
+        "all results should be in a .collect package, got: {:?}",
+        results.iter().map(|r| &r.fqn).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn search_prefix_glob_still_works() {
+    let project = require_indexed_project!();
+    let reader = IndexReader::open(&project.index_dir()).unwrap();
+
+    // Immutable* should still work (prefix glob, uses forward simple_name field).
+    // Results include direct matches (e.g., ImmutableList) and inner classes
+    // of those matches (e.g., ImmutableList.Builder), so we check that some
+    // name component starts with "immutable".
+    let (results, count, _) = reader
+        .search(&SearchQuery {
+            limit: 50,
+            ..SearchQuery::with_types("Immutable*", &[SymbolKind::Class])
+        })
+        .unwrap();
+
+    assert!(count > 0, "prefix glob Immutable* should match");
+    assert!(
+        results.iter().all(|r| {
+            r.simple_name
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|part| part.to_lowercase().starts_with("immutable"))
+        }),
+        "all results should have a name component starting with 'immutable', got: {:?}",
+        results.iter().map(|r| &r.simple_name).collect::<Vec<_>>()
+    );
+    // Verify at least one direct ImmutableList match is returned
+    assert!(
+        results
+            .iter()
+            .any(|r| r.simple_name.to_lowercase().starts_with("immutable")),
+        "at least one result should have simple_name starting with 'immutable'"
+    );
+}
