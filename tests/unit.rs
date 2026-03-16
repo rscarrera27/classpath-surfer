@@ -21,7 +21,7 @@ fn manifest_diff() {
         version: version.to_string(),
         jar_path: PathBuf::from("/fake.jar"),
         source_jar_path: None,
-        scope: "compile".to_string(),
+        classpath: "compile".to_string(),
     };
 
     let manifest_a = ClasspathManifest {
@@ -76,7 +76,7 @@ fn manifest_merge_dedup() {
         version: "33.4.0-jre".to_string(),
         jar_path: PathBuf::from("/fake.jar"),
         source_jar_path: None,
-        scope: "compile".to_string(),
+        classpath: "compile".to_string(),
     };
 
     let manifest = ClasspathManifest {
@@ -281,7 +281,7 @@ fn search_without_index() {
             dependency: None,
             access_levels: &[],
             offset: 0,
-            scope: None,
+            classpath: None,
             package: None,
         },
     );
@@ -321,7 +321,7 @@ fn agentic_error_output() {
             dependency: None,
             access_levels: &[],
             offset: 0,
-            scope: None,
+            classpath: None,
             package: None,
         },
     );
@@ -356,7 +356,7 @@ fn agentic_exit_codes() {
             dependency: None,
             access_levels: &[],
             offset: 0,
-            scope: None,
+            classpath: None,
             package: None,
         },
     );
@@ -374,19 +374,19 @@ fn agentic_exit_codes() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn manifest_scopes_by_gav() {
+fn manifest_classpaths_by_gav() {
     use classpath_surfer::manifest::{
         ClasspathManifest, ConfigurationManifest, DependencyInfo, ModuleManifest,
     };
     use std::collections::BTreeSet;
 
-    let make_dep = |group: &str, artifact: &str, version: &str, scope: &str| DependencyInfo {
+    let make_dep = |group: &str, artifact: &str, version: &str, classpath: &str| DependencyInfo {
         group: group.to_string(),
         artifact: artifact.to_string(),
         version: version.to_string(),
         jar_path: PathBuf::from("/fake.jar"),
         source_jar_path: None,
-        scope: scope.to_string(),
+        classpath: classpath.to_string(),
     };
 
     let manifest = ClasspathManifest {
@@ -423,35 +423,30 @@ fn manifest_scopes_by_gav() {
         }],
     };
 
-    let scope_map = manifest.scopes_by_gav();
+    let classpath_map = manifest.classpaths_by_gav();
 
     // guava appears in both
-    let guava_scopes = scope_map.get("com.google.guava:guava:33.4.0-jre").unwrap();
+    let guava_classpaths = classpath_map
+        .get("com.google.guava:guava:33.4.0-jre")
+        .unwrap();
     assert_eq!(
-        *guava_scopes,
-        BTreeSet::from([
-            "compileClasspath".to_string(),
-            "runtimeClasspath".to_string()
-        ])
+        *guava_classpaths,
+        BTreeSet::from(["compile".to_string(), "runtime".to_string()])
     );
 
     // gson is compile-only
-    let gson_scopes = scope_map.get("com.google.code.gson:gson:2.11.0").unwrap();
-    assert_eq!(
-        *gson_scopes,
-        BTreeSet::from(["compileClasspath".to_string()])
-    );
+    let gson_classpaths = classpath_map
+        .get("com.google.code.gson:gson:2.11.0")
+        .unwrap();
+    assert_eq!(*gson_classpaths, BTreeSet::from(["compile".to_string()]));
 
     // slf4j is runtime-only
-    let slf4j_scopes = scope_map.get("org.slf4j:slf4j-api:2.0.0").unwrap();
-    assert_eq!(
-        *slf4j_scopes,
-        BTreeSet::from(["runtimeClasspath".to_string()])
-    );
+    let slf4j_classpaths = classpath_map.get("org.slf4j:slf4j-api:2.0.0").unwrap();
+    assert_eq!(*slf4j_classpaths, BTreeSet::from(["runtime".to_string()]));
 }
 
 #[test]
-fn search_result_scopes_serialization() {
+fn search_result_classpaths_serialization() {
     use classpath_surfer::model::{SearchResult, SignatureDisplay, SymbolKind};
 
     let result = SearchResult {
@@ -466,15 +461,12 @@ fn search_result_scopes_serialization() {
         access_flags: "public abstract".to_string(),
         source: "source_jar".to_string(),
         source_language: None,
-        scopes: vec![
-            "compileClasspath".to_string(),
-            "runtimeClasspath".to_string(),
-        ],
+        classpaths: vec!["compile".to_string(), "runtime".to_string()],
     };
 
     let json = serde_json::to_value(&result).unwrap();
-    let scopes = json["scopes"].as_array().unwrap();
-    assert_eq!(scopes.len(), 2);
-    assert_eq!(scopes[0], "compileClasspath");
-    assert_eq!(scopes[1], "runtimeClasspath");
+    let classpaths = json["classpaths"].as_array().unwrap();
+    assert_eq!(classpaths.len(), 2);
+    assert_eq!(classpaths[0], "compile");
+    assert_eq!(classpaths[1], "runtime");
 }

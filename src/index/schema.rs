@@ -4,7 +4,7 @@
 //!
 //! | Category | Fields | Tantivy options | Purpose |
 //! |----------|--------|----------------|---------|
-//! | **Identity** | `gav`, `symbol_kind`, `fqn`, `package`, `class_name`, `scopes` | `STRING \| STORED` | Exact-match filtering |
+//! | **Identity** | `gav`, `symbol_kind`, `fqn`, `package`, `class_name`, `classpaths` | `STRING \| STORED` | Exact-match filtering |
 //! | **Search** | `simple_name`, `name_parts` | `TEXT \| STORED` / `TEXT` | Tokenized full-text search |
 //! | **Metadata** | `descriptor`, `signature_java`, `signature_kotlin`, `access_flags`, `source`, `source_path`, `source_language`, `source_file_name` | `STORED` (some `STRING \| STORED`) | Carried in results, not directly searchable |
 
@@ -45,7 +45,7 @@ pub fn build_schema() -> Schema {
     builder.add_text_field("source_path", STORED);
     builder.add_text_field("source_language", STRING | STORED);
     builder.add_text_field("source_file_name", STORED);
-    builder.add_text_field("scopes", STRING | STORED);
+    builder.add_text_field("classpaths", STRING | STORED);
 
     builder.build()
 }

@@ -49,7 +49,7 @@ impl IndexReader {
             "access_level",
             "source",
             "source_language",
-            "scopes",
+            "classpaths",
         ];
         let missing: Vec<&str> = required_fields
             .iter()
@@ -90,7 +90,7 @@ impl IndexReader {
     /// Results without a text query are sorted by kind then FQN.
     ///
     /// Results can be narrowed by symbol type, a `dependency` GAV pattern
-    /// (glob with `*`/`?`), access level, package pattern, and scope.
+    /// (glob with `*`/`?`), access level, package pattern, and classpath.
     ///
     /// Returns `(results, total_count, matched_gavs)` where `matched_gavs` is
     /// `Some` when a `dependency` pattern was provided.
@@ -146,7 +146,7 @@ impl IndexReader {
         let (mut results, total_count) = if is_listing {
             // Listing mode: fetch offset+limit docs, sort by kind then FQN, then slice
             let pre_filter_count = searcher.search(&combined, &Count)?;
-            let fetch_count = if sq.scope.is_some() {
+            let fetch_count = if sq.classpath.is_some() {
                 pre_filter_count
             } else {
                 sq.offset.saturating_add(sq.limit)
@@ -175,9 +175,9 @@ impl IndexReader {
                     .then_with(|| a.fqn.cmp(&b.fqn))
             });
 
-            // Apply scope filter before pagination in listing mode
-            if let Some(scope_filter) = sq.scope {
-                all_results.retain(|r| r.scopes.iter().any(|s| s == scope_filter));
+            // Apply classpath filter before pagination in listing mode
+            if let Some(classpath_filter) = sq.classpath {
+                all_results.retain(|r| r.classpaths.iter().any(|s| s == classpath_filter));
                 let total = all_results.len();
                 let sliced: Vec<SearchResult> = all_results
                     .into_iter()
@@ -209,9 +209,9 @@ impl IndexReader {
             (results, total_count)
         };
 
-        // Scope filter (post-query refinement, search mode only)
-        if let Some(scope_filter) = sq.scope {
-            results.retain(|r| r.scopes.iter().any(|s| s == scope_filter));
+        // Classpath filter (post-query refinement, search mode only)
+        if let Some(classpath_filter) = sq.classpath {
+            results.retain(|r| r.classpaths.iter().any(|s| s == classpath_filter));
         }
 
         Ok((results, total_count, matched_gavs))
@@ -641,11 +641,11 @@ fn doc_to_search_result(schema: &Schema, doc: &tantivy::TantivyDocument) -> Sear
         Some(kt_sig)
     };
 
-    let scopes_str = get_text("scopes");
-    let scopes: Vec<String> = if scopes_str.is_empty() {
+    let classpaths_str = get_text("classpaths");
+    let classpaths: Vec<String> = if classpaths_str.is_empty() {
         vec![]
     } else {
-        scopes_str.split(',').map(|s| s.to_string()).collect()
+        classpaths_str.split(',').map(|s| s.to_string()).collect()
     };
 
     SearchResult {
@@ -660,7 +660,7 @@ fn doc_to_search_result(schema: &Schema, doc: &tantivy::TantivyDocument) -> Sear
         access_flags: get_text("access_flags"),
         source,
         source_language,
-        scopes,
+        classpaths,
     }
 }
 

@@ -104,7 +104,7 @@ pub fn run_with_java_home(
     let force_full = force || open_result.schema_rebuilt;
 
     let unique_deps = merge::deduplicate(&current_manifest);
-    let scope_map = current_manifest.scopes_by_gav();
+    let classpath_map = current_manifest.classpaths_by_gav();
 
     let output = if force_full || !indexed_manifest_path.exists() {
         // Full index: index everything
@@ -127,11 +127,11 @@ pub fn run_with_java_home(
                 progress.inc(1);
                 continue;
             }
-            let scopes_str = scope_map
+            let classpaths_str = classpath_map
                 .get(&dep.gav())
                 .map(|s| s.iter().cloned().collect::<Vec<_>>().join(","))
                 .unwrap_or_default();
-            match writer::index_dependency(&index_writer, &fields, dep, &scopes_str) {
+            match writer::index_dependency(&index_writer, &fields, dep, &classpaths_str) {
                 Ok(count) => {
                     total_symbols += count;
                 }
@@ -207,11 +207,11 @@ pub fn run_with_java_home(
                 progress.inc(1);
                 continue;
             }
-            let scopes_str = scope_map
+            let classpaths_str = classpath_map
                 .get(&dep.gav())
                 .map(|s| s.iter().cloned().collect::<Vec<_>>().join(","))
                 .unwrap_or_default();
-            match writer::index_dependency(&index_writer, &fields, dep, &scopes_str) {
+            match writer::index_dependency(&index_writer, &fields, dep, &classpaths_str) {
                 Ok(count) => {
                     total_symbols += count;
                 }

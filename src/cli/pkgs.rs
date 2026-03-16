@@ -9,12 +9,12 @@ use anyhow::Result;
 use crate::index::reader::IndexReader;
 use crate::model::{PkgInfo, PkgsOutput, matches_glob_pattern};
 
-/// List indexed packages, optionally filtered by a glob pattern, dependency, scope, or both.
+/// List indexed packages, optionally filtered by a glob pattern, dependency, classpath, or both.
 pub fn run(
     project_dir: &Path,
     query: Option<&str>,
     dependency: Option<&str>,
-    scope: Option<&str>,
+    classpath: Option<&str>,
     limit: usize,
     offset: usize,
 ) -> Result<PkgsOutput> {
@@ -23,12 +23,12 @@ pub fn run(
     let index_dir = project_dir.join(".classpath-surfer/index");
     let reader = IndexReader::open(&index_dir)?;
 
-    // Resolve scope to a set of GAVs from the manifest
-    let scope_gavs = load_scope_gavs(project_dir, scope)?;
+    // Resolve classpath to a set of GAVs from the manifest
+    let classpath_gavs = load_classpath_gavs(project_dir, classpath)?;
 
-    let (all_pkgs, matched_gavs) = match (dependency, &scope_gavs) {
+    let (all_pkgs, matched_gavs) = match (dependency, &classpath_gavs) {
         (Some(dep), Some(gavs)) => {
-            // Both: get dependency-matching GAVs, intersect with scope GAVs
+            // Both: get dependency-matching GAVs, intersect with classpath GAVs
             let (_, dep_gavs) = reader.list_packages_for_dependency(dep)?;
             let intersected: Vec<&str> = dep_gavs
                 .iter()
@@ -75,7 +75,7 @@ pub fn run(
     Ok(PkgsOutput {
         query: query.map(|s| s.to_string()),
         dependency: dependency.map(|s| s.to_string()),
-        scope: scope.map(|s| s.to_string()),
+        classpath: classpath.map(|s| s.to_string()),
         matched_gavs,
         total_count,
         offset,
@@ -85,11 +85,11 @@ pub fn run(
     })
 }
 
-/// Load GAVs belonging to a configuration scope from the classpath manifest.
+/// Load GAVs belonging to a classpath from the classpath manifest.
 ///
-/// Returns `None` if no scope filter is requested or the manifest doesn't exist.
-fn load_scope_gavs(project_dir: &Path, scope: Option<&str>) -> Result<Option<Vec<String>>> {
-    let Some(scope_filter) = scope else {
+/// Returns `None` if no classpath filter is requested or the manifest doesn't exist.
+fn load_classpath_gavs(project_dir: &Path, classpath: Option<&str>) -> Result<Option<Vec<String>>> {
+    let Some(classpath_filter) = classpath else {
         return Ok(None);
     };
 
@@ -100,11 +100,11 @@ fn load_scope_gavs(project_dir: &Path, scope: Option<&str>) -> Result<Option<Vec
 
     let content = std::fs::read_to_string(&manifest_path)?;
     let manifest: crate::manifest::ClasspathManifest = serde_json::from_str(&content)?;
-    let scope_map = manifest.scopes_by_gav();
+    let classpath_map = manifest.classpaths_by_gav();
 
-    let gavs: Vec<String> = scope_map
+    let gavs: Vec<String> = classpath_map
         .into_iter()
-        .filter(|(_, scopes)| scopes.contains(scope_filter))
+        .filter(|(_, classpaths)| classpaths.contains(classpath_filter))
         .map(|(gav, _)| gav)
         .collect();
 

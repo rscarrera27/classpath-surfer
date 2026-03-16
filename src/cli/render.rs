@@ -43,7 +43,7 @@ pub fn search_list(output: &SearchOutput) {
 
 /// Render search results as TAB-separated plain text.
 ///
-/// Columns: `FQN\tKIND\tJAVA_SIG\tKOTLIN_SIG\tSOURCE\tLANG\tGAV\tSCOPE`
+/// Columns: `FQN\tKIND\tJAVA_SIG\tKOTLIN_SIG\tSOURCE\tLANG\tGAV\tCLASSPATH`
 pub fn search(output: &SearchOutput) {
     let query_display = output.query.as_deref().unwrap_or("*");
 
@@ -89,10 +89,10 @@ pub fn search(output: &SearchOutput) {
         } else {
             ""
         };
-        let scope = format_scopes(&r.scopes);
+        let classpath = format_classpaths(&r.classpaths);
         println!(
             "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-            r.fqn, r.symbol_kind, r.signature.java, kt_sig, source, lang, r.gav, scope
+            r.fqn, r.symbol_kind, r.signature.java, kt_sig, source, lang, r.gav, classpath
         );
     }
 }
@@ -196,7 +196,7 @@ pub fn clean(output: &CleanOutput) {
 
 /// Render dependency list as TAB-separated plain text.
 ///
-/// Columns: `GAV\tSYMBOL_COUNT\tSCOPE`
+/// Columns: `GAV\tSYMBOL_COUNT\tCLASSPATH`
 pub fn deps(output: &DepsOutput) {
     if output.dependencies.is_empty() {
         if let Some(ref q) = output.query {
@@ -221,7 +221,7 @@ pub fn deps(output: &DepsOutput) {
             "{}\t{}\t{}",
             dep.gav,
             dep.symbol_count,
-            format_scopes(&dep.scopes)
+            format_classpaths(&dep.classpaths)
         );
     }
 }
@@ -254,14 +254,14 @@ pub fn pkgs(output: &PkgsOutput) {
     }
 }
 
-/// Format configuration scopes for display (e.g. "compile+runtime").
-fn format_scopes(scopes: &[String]) -> String {
-    if scopes.is_empty() {
+/// Format classpaths for display (e.g. "compile+runtime").
+fn format_classpaths(classpaths: &[String]) -> String {
+    if classpaths.is_empty() {
         return String::new();
     }
-    scopes
+    classpaths
         .iter()
-        .map(|s| s.strip_suffix("Classpath").unwrap_or(s))
+        .map(|s| s.as_str())
         .collect::<Vec<_>>()
         .join("+")
 }

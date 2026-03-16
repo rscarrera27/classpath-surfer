@@ -31,7 +31,7 @@ Options:
   - Query can be omitted with `--package` to list all symbols in matching packages
   - Use `search pkg` to discover available package names
 - `--access public,protected` — include non-public symbols (default: `public`; use `--access all` for everything)
-- `--scope <name>` — narrow by configuration scope (e.g., `compileClasspath`)
+- `--classpath <name>` — narrow by classpath (e.g., `compile`)
 - `--limit N` / `--offset N` — pagination
 
 Smart search behavior (auto-detected from query string):
@@ -42,11 +42,11 @@ Smart search behavior (auto-detected from query string):
 
 ### `search dep [pattern]` — List dependencies
 
-List indexed dependencies with symbol counts and scopes.
+List indexed dependencies with symbol counts and classpaths.
 
 Options:
 - Positional query — filter by GAV pattern (glob)
-- `--scope <name>` — filter by configuration scope
+- `--classpath <name>` — filter by classpath
 - `--limit N` / `--offset N` — pagination
 
 ### `search pkg [pattern]` — List packages
@@ -56,14 +56,14 @@ List unique Java packages with symbol counts.
 Options:
 - Positional query — filter by package pattern (glob)
 - `--dependency <GAV>` — restrict to specific dependencies
-- `--scope <name>` — filter by configuration scope
+- `--classpath <name>` — filter by classpath
 - `--limit N` / `--offset N` — pagination
 
 ## Formatting
 
 Summarize results as a concise markdown table:
 - Symbol search: FQN, Kind, Signature, Dependency (use Kotlin signature if available)
-- Dep search: GAV, Scope, Symbol Count
+- Dep search: GAV, Classpath, Symbol Count
 - Pkg search: Package, Symbol Count
 
 If `total_matches` or `total_count` exceeds displayed results, note the truncation.

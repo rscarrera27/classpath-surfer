@@ -32,7 +32,7 @@ Coding agents (like Claude Code) working on Gradle Java/Kotlin projects repeated
 
 | | Feature | Description |
 |---|---------|-------------|
-| :mag: | **Symbol search** | Smart search with auto FQN detection, CamelCase token splitting, and prefix matching — filter by kind, dependency, access level, or configuration scope |
+| :mag: | **Symbol search** | Smart search with auto FQN detection, CamelCase token splitting, and prefix matching — filter by kind, dependency, access level, or classpath |
 | :zap: | **Fast indexing** | Auto-extract Gradle project classpath and index all symbols in seconds; incremental updates via GAV-level diff |
 | :globe_with_meridians: | **Kotlin signatures** | Decode `@kotlin.Metadata` protobuf to display native Kotlin signatures like `suspend fun` and `data class` |
 | :package: | **JVM-language agnostic** | Java, Kotlin, Scala, Groovy, Clojure — search symbols from dependencies written in any JVM language |
@@ -79,8 +79,8 @@ classpath-surfer search symbol --dependency "com.google.guava:guava"
 # Glob search for HTTP client classes
 classpath-surfer search symbol "Http*Client" --type class
 
-# Filter by configuration scope
-classpath-surfer search symbol Annotation --type class --scope compileClasspath
+# Filter by classpath
+classpath-surfer search symbol Annotation --type class --classpath compile
 
 # FQN-like queries are auto-detected
 classpath-surfer search symbol com.google.common.collect.ImmutableList
@@ -106,14 +106,14 @@ If a `-sources.jar` is available it will be used; otherwise the class is decompi
 ### Browse dependencies
 
 ```bash
-# List indexed dependencies with symbol counts and scopes
+# List indexed dependencies with symbol counts and classpaths
 classpath-surfer search dep
 
 # Filter by GAV pattern
 classpath-surfer search dep "io.netty:*"
 
 # Show only runtime dependencies
-classpath-surfer search dep --scope runtimeClasspath
+classpath-surfer search dep --classpath runtime
 ```
 
 ### Browse packages
@@ -128,8 +128,8 @@ classpath-surfer search pkg "com.google.*"
 # Packages from a specific dependency
 classpath-surfer search pkg --dependency "com.google.code.gson:gson:*"
 
-# Filter by configuration scope
-classpath-surfer search pkg --scope compileClasspath
+# Filter by classpath
+classpath-surfer search pkg --classpath compile
 ```
 
 ### AI agent / script integration

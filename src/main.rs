@@ -67,12 +67,12 @@ impl Pagination {
     }
 }
 
-/// Shared scope filter for commands that support configuration scope restriction.
+/// Shared classpath filter for commands that support classpath restriction.
 #[derive(Args)]
-struct ScopeFilter {
-    /// Filter by configuration scope (e.g., compileClasspath, runtimeClasspath)
+struct ClasspathFilter {
+    /// Filter by classpath (e.g., compile, runtime)
     #[arg(long)]
-    scope: Option<String>,
+    classpath: Option<String>,
 }
 
 /// Shared dependency filter for commands that support GAV pattern restriction.
@@ -140,7 +140,7 @@ enum SearchCommands {
         long_about = "Search for symbols in indexed dependencies.\n\n\
             Supports smart text search, glob patterns (*, ?), and auto-detected FQN\n\
             matching. Results can be filtered by symbol type, access level, dependency\n\
-            GAV pattern, Java package pattern, and configuration scope. When --dependency\n\
+            GAV pattern, Java package pattern, and classpath. When --dependency\n\
             or --package is used without a query, lists all symbols in matching entries.",
         after_help = "\
 EXAMPLES:
@@ -172,7 +172,7 @@ EXAMPLES:
         pagination: Pagination,
 
         #[command(flatten)]
-        scope_filter: ScopeFilter,
+        classpath_filter: ClasspathFilter,
 
         #[command(flatten)]
         dep_filter: DependencyFilter,
@@ -181,13 +181,13 @@ EXAMPLES:
     /// List indexed dependencies with symbol counts
     #[command(
         long_about = "List indexed dependencies with symbol counts.\n\n\
-            Shows GAV coordinates, symbol counts, and configuration scopes for all\n\
+            Shows GAV coordinates, symbol counts, and classpaths for all\n\
             indexed dependencies. Supports GAV glob pattern filtering and pagination.",
         after_help = "\
 EXAMPLES:
   classpath-surfer search dep
   classpath-surfer search dep 'com.google.*:*'
-  classpath-surfer search dep --scope compileClasspath
+  classpath-surfer search dep --classpath compile
   classpath-surfer search dep --limit 10 --offset 20"
     )]
     Dep {
@@ -198,7 +198,7 @@ EXAMPLES:
         pagination: Pagination,
 
         #[command(flatten)]
-        scope_filter: ScopeFilter,
+        classpath_filter: ClasspathFilter,
     },
 
     /// List unique Java packages with symbol counts
@@ -211,7 +211,7 @@ EXAMPLES:
   classpath-surfer search pkg
   classpath-surfer search pkg 'com.google.*'
   classpath-surfer search pkg --dependency 'com.google.*:guava:*'
-  classpath-surfer search pkg --scope compileClasspath
+  classpath-surfer search pkg --classpath compile
   classpath-surfer search pkg --limit 10 --offset 20"
     )]
     Pkg {
@@ -222,7 +222,7 @@ EXAMPLES:
         pagination: Pagination,
 
         #[command(flatten)]
-        scope_filter: ScopeFilter,
+        classpath_filter: ClasspathFilter,
 
         #[command(flatten)]
         dep_filter: DependencyFilter,
@@ -329,7 +329,7 @@ fn main() {
                 access,
                 package,
                 pagination,
-                scope_filter,
+                classpath_filter,
                 dep_filter,
             } => {
                 if query.is_none() && dep_filter.dependency.is_none() && package.is_none() {
@@ -362,7 +362,7 @@ fn main() {
                         dependency: dep_filter.dependency.as_deref(),
                         access_levels: &access_levels,
                         offset: 0,
-                        scope: scope_filter.scope.as_deref(),
+                        classpath: classpath_filter.classpath.as_deref(),
                         package: package.as_deref(),
                     };
                     cli::require_index(&project_dir).and_then(|()| {
@@ -376,7 +376,7 @@ fn main() {
                         dependency: dep_filter.dependency.as_deref(),
                         access_levels: &access_levels,
                         offset: pagination.offset,
-                        scope: scope_filter.scope.as_deref(),
+                        classpath: classpath_filter.classpath.as_deref(),
                         package: package.as_deref(),
                     };
                     let plain_renderer = if is_listing {
@@ -395,7 +395,7 @@ fn main() {
             SearchCommands::Dep {
                 query,
                 pagination,
-                scope_filter,
+                classpath_filter,
             } => {
                 let effective_limit = pagination.effective_limit(output_mode);
                 if output_mode == OutputMode::Tui {
@@ -403,7 +403,7 @@ fn main() {
                         classpath_surfer::tui::deps::run(
                             &project_dir,
                             query.as_deref(),
-                            scope_filter.scope.as_deref(),
+                            classpath_filter.classpath.as_deref(),
                         )
                     })
                 } else {
@@ -412,7 +412,7 @@ fn main() {
                         cli::deps::run(
                             &project_dir,
                             query.as_deref(),
-                            scope_filter.scope.as_deref(),
+                            classpath_filter.classpath.as_deref(),
                             effective_limit,
                             pagination.offset,
                         ),
@@ -424,7 +424,7 @@ fn main() {
             SearchCommands::Pkg {
                 query,
                 pagination,
-                scope_filter,
+                classpath_filter,
                 dep_filter,
             } => {
                 let effective_limit = pagination.effective_limit(output_mode);
@@ -434,7 +434,7 @@ fn main() {
                         &project_dir,
                         query.as_deref(),
                         dep_filter.dependency.as_deref(),
-                        scope_filter.scope.as_deref(),
+                        classpath_filter.classpath.as_deref(),
                         effective_limit,
                         pagination.offset,
                     ),

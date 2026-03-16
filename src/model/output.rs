@@ -36,8 +36,8 @@ pub struct SearchQuery<'a> {
     pub dependency: Option<&'a str>,
     /// Filter by access level.  Empty slice = all (no filter).
     pub access_levels: &'a [AccessLevel],
-    /// Filter results to a specific configuration scope (e.g. `"compileClasspath"`).
-    pub scope: Option<&'a str>,
+    /// Filter results to a specific classpath (e.g. `"compile"`).
+    pub classpath: Option<&'a str>,
     /// Filter results by Java package pattern (glob with `*`/`?` wildcards, e.g. `"com.google.common.*"`).
     pub package: Option<&'a str>,
 }
@@ -52,7 +52,7 @@ impl<'a> SearchQuery<'a> {
             offset: 0,
             dependency: None,
             access_levels: &[],
-            scope: None,
+            classpath: None,
             package: None,
         }
     }
@@ -201,9 +201,9 @@ pub struct PkgsOutput {
     /// GAV pattern used to restrict to specific dependencies.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependency: Option<String>,
-    /// Configuration scope used to filter dependencies.
+    /// Classpath used to filter dependencies.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub scope: Option<String>,
+    pub classpath: Option<String>,
     /// GAVs that matched the dependency pattern.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matched_gavs: Option<Vec<String>>,
@@ -253,6 +253,6 @@ pub struct DepInfo {
     pub gav: String,
     /// Number of indexed symbols in this dependency.
     pub symbol_count: usize,
-    /// Configuration scopes that include this dependency.
-    pub scopes: Vec<String>,
+    /// Classpaths that include this dependency.
+    pub classpaths: Vec<String>,
 }

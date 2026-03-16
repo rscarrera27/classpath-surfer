@@ -59,8 +59,9 @@ pub struct DependencyInfo {
     pub jar_path: PathBuf,
     /// Absolute path to the source JAR, if available.
     pub source_jar_path: Option<PathBuf>,
-    /// The Gradle configuration that pulled in this dependency (e.g. `"compileClasspath"`).
-    pub scope: String,
+    /// The classpath that pulled in this dependency (e.g. `"compile"`).
+    #[serde(rename = "scope")]
+    pub classpath: String,
 }
 
 impl DependencyInfo {
@@ -71,21 +72,28 @@ impl DependencyInfo {
 }
 
 impl ClasspathManifest {
-    /// Build a mapping from GAV string to the set of configuration names that include it.
+    /// Build a mapping from GAV string to the set of classpaths that include it.
     ///
     /// Unlike [`all_dependencies()`](Self::all_dependencies) which deduplicates by GAV,
-    /// this method preserves every configuration a GAV appears in.
-    pub fn scopes_by_gav(
+    /// this method preserves every classpath a GAV appears in.
+    ///
+    /// Configuration names like `"compileClasspath"` are normalized by stripping
+    /// the `"Classpath"` suffix, so the returned set contains values like
+    /// `"compile"` and `"runtime"`.
+    pub fn classpaths_by_gav(
         &self,
     ) -> std::collections::HashMap<String, std::collections::BTreeSet<String>> {
         let mut map: std::collections::HashMap<String, std::collections::BTreeSet<String>> =
             std::collections::HashMap::new();
         for module in &self.modules {
             for config in &module.configurations {
+                let classpath = config
+                    .name
+                    .strip_suffix("Classpath")
+                    .unwrap_or(&config.name)
+                    .to_string();
                 for dep in &config.dependencies {
-                    map.entry(dep.gav())
-                        .or_default()
-                        .insert(config.name.clone());
+                    map.entry(dep.gav()).or_default().insert(classpath.clone());
                 }
             }
         }

@@ -65,8 +65,8 @@ pub struct SchemaFields {
     pub source_language: Field,
     /// Source file name field.
     pub source_file_name: Field,
-    /// Comma-separated configuration scopes (e.g. `"compileClasspath,runtimeClasspath"`).
-    pub scopes: Field,
+    /// Comma-separated classpaths (e.g. `"compile,runtime"`).
+    pub classpaths: Field,
 }
 
 impl SchemaFields {
@@ -93,7 +93,7 @@ impl SchemaFields {
             source_path: schema.get_field("source_path").unwrap(),
             source_language: schema.get_field("source_language").unwrap(),
             source_file_name: schema.get_field("source_file_name").unwrap(),
-            scopes: schema.get_field("scopes").unwrap(),
+            classpaths: schema.get_field("classpaths").unwrap(),
         }
     }
 }
@@ -172,7 +172,7 @@ fn is_schema_compatible(schema: &Schema) -> bool {
         "access_level",
         "source",
         "source_language",
-        "scopes",
+        "classpaths",
     ];
     required.iter().all(|&name| schema.get_field(name).is_ok())
 }
@@ -189,7 +189,7 @@ pub fn index_dependency(
     writer: &IndexWriter,
     fields: &SchemaFields,
     dep: &DependencyInfo,
-    scopes: &str,
+    classpaths: &str,
 ) -> Result<usize> {
     let gav = dep.gav();
     let dep_has_source = dep.source_jar_path.as_ref().is_some_and(|p| p.exists());
@@ -220,7 +220,7 @@ pub fn index_dependency(
                 }
             }
 
-            add_symbol_doc(writer, fields, &symbol, scopes)?;
+            add_symbol_doc(writer, fields, &symbol, classpaths)?;
             count += 1;
         }
         Ok(())
@@ -233,7 +233,7 @@ fn add_symbol_doc(
     writer: &IndexWriter,
     f: &SchemaFields,
     doc_data: &SymbolDoc,
-    scopes: &str,
+    classpaths: &str,
 ) -> Result<()> {
     let lang_str = doc_data
         .source
@@ -258,7 +258,7 @@ fn add_symbol_doc(
         f.source_path => doc_data.source.source_path().unwrap_or(""),
         f.source_language => lang_str.as_str(),
         f.source_file_name => doc_data.source.source_file_name().unwrap_or(""),
-        f.scopes => scopes,
+        f.classpaths => classpaths,
     ))?;
 
     Ok(())

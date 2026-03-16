@@ -78,7 +78,7 @@ allprojects { project ->
                         // Merge binary + source info
                         binaryArtifacts.each { key, info ->
                             info['source_jar_path'] = sourceFiles[key]
-                            info['scope'] = configName
+                            info['classpath'] = configName
                             deps.add(info)
                         }
 

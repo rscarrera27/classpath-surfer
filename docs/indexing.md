@@ -74,7 +74,7 @@ struct SymbolDoc {
 
 | 카테고리 | 필드 | 옵션 | 용도 |
 |---------|------|------|------|
-| **Identity** | `gav`, `symbol_kind`, `fqn`, `package`, `class_name`, `scopes` | `STRING \| STORED` | exact match 필터링 |
+| **Identity** | `gav`, `symbol_kind`, `fqn`, `package`, `class_name`, `classpaths` | `STRING \| STORED` | exact match 필터링 |
 | **Search** | `simple_name`, `name_parts` | `TEXT \| STORED` / `TEXT` | 토큰화 검색 |
 | **Metadata** | `descriptor`, `signature_display`, `access_flags`, `has_source`, `source_path`, `source_language`, `source_file_name`, `kotlin_signature_display` | `STORED` | 결과에 포함, 검색 불가 |
 

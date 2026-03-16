@@ -18,19 +18,19 @@ use crate::model::{DepInfo, SearchQuery};
 /// Loads all dependencies matching the optional filters, then enters an event
 /// loop where the user can navigate and press Enter to drill down into a
 /// dependency's symbols via the search TUI.
-pub fn run(project_dir: &Path, query: Option<&str>, scope: Option<&str>) -> Result<()> {
+pub fn run(project_dir: &Path, query: Option<&str>, classpath: Option<&str>) -> Result<()> {
     // Note: require_index is called by main.rs before entering TUI, so not needed here.
 
     let index_dir = project_dir.join(".classpath-surfer/index");
     let reader = IndexReader::open(&index_dir)?;
     let all_gavs = reader.list_gavs()?;
 
-    // Load manifest for scope info
+    // Load manifest for classpath info
     let manifest_path = project_dir.join(".classpath-surfer/classpath-manifest.json");
-    let scope_map = if manifest_path.exists() {
+    let classpath_map = if manifest_path.exists() {
         let content = std::fs::read_to_string(&manifest_path)?;
         let manifest: crate::manifest::ClasspathManifest = serde_json::from_str(&content)?;
-        manifest.scopes_by_gav()
+        manifest.classpaths_by_gav()
     } else {
         std::collections::HashMap::new()
     };
@@ -45,13 +45,13 @@ pub fn run(project_dir: &Path, query: Option<&str>, scope: Option<&str>) -> Resu
         all_gavs.iter().collect()
     };
 
-    let filtered: Vec<&(String, usize)> = if let Some(scope_filter) = scope {
+    let filtered: Vec<&(String, usize)> = if let Some(classpath_filter) = classpath {
         filtered
             .into_iter()
             .filter(|(gav, _)| {
-                scope_map
+                classpath_map
                     .get(gav.as_str())
-                    .is_some_and(|scopes| scopes.contains(scope_filter))
+                    .is_some_and(|classpaths| classpaths.contains(classpath_filter))
             })
             .collect()
     } else {
@@ -62,14 +62,14 @@ pub fn run(project_dir: &Path, query: Option<&str>, scope: Option<&str>) -> Resu
     let deps: Vec<DepInfo> = filtered
         .into_iter()
         .map(|(gav, count)| {
-            let scopes: Vec<String> = scope_map
+            let classpaths: Vec<String> = classpath_map
                 .get(gav.as_str())
                 .map(|s| s.iter().cloned().collect())
                 .unwrap_or_default();
             DepInfo {
                 gav: gav.clone(),
                 symbol_count: *count,
-                scopes,
+                classpaths,
             }
         })
         .collect();
@@ -120,7 +120,7 @@ pub fn run(project_dir: &Path, query: Option<&str>, scope: Option<&str>) -> Resu
                         offset: 0,
                         dependency: Some(selected_gav),
                         access_levels: &[],
-                        scope,
+                        classpath,
                         package: None,
                     };
 
@@ -164,7 +164,7 @@ fn render_deps_table(
     let header = Row::new(vec![
         Cell::from("GAV"),
         Cell::from("Symbols"),
-        Cell::from("Scopes"),
+        Cell::from("Classpaths"),
     ])
     .style(Style::default().bold())
     .bottom_margin(1);
@@ -175,7 +175,7 @@ fn render_deps_table(
             Row::new(vec![
                 Cell::from(dep.gav.clone()),
                 Cell::from(dep.symbol_count.to_string()),
-                Cell::from(format_scopes(&dep.scopes)),
+                Cell::from(format_classpaths(&dep.classpaths)),
             ])
         })
         .collect();
@@ -228,10 +228,10 @@ fn render_detail_panel(frame: &mut Frame, area: Rect, dep: &DepInfo) {
         Span::raw(dep.symbol_count.to_string()),
     ]));
 
-    if !dep.scopes.is_empty() {
+    if !dep.classpaths.is_empty() {
         lines.push(Line::from(vec![
-            Span::styled("Scopes: ", label_style),
-            Span::raw(format_scopes(&dep.scopes)),
+            Span::styled("Classpaths: ", label_style),
+            Span::raw(format_classpaths(&dep.classpaths)),
         ]));
     }
 
@@ -240,14 +240,14 @@ fn render_detail_panel(frame: &mut Frame, area: Rect, dep: &DepInfo) {
     frame.render_widget(detail, area);
 }
 
-/// Format configuration scopes for display (e.g. "compile, runtime").
-fn format_scopes(scopes: &[String]) -> String {
-    if scopes.is_empty() {
+/// Format classpaths for display (e.g. "compile, runtime").
+fn format_classpaths(classpaths: &[String]) -> String {
+    if classpaths.is_empty() {
         return String::new();
     }
-    scopes
+    classpaths
         .iter()
-        .map(|s| s.strip_suffix("Classpath").unwrap_or(s))
+        .map(|s| s.as_str())
         .collect::<Vec<_>>()
         .join(", ")
 }

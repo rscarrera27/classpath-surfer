@@ -612,7 +612,7 @@ fn search_dependency_lists_symbols() {
         offset: 0,
         dependency: Some("com.google.code.gson:gson:*"),
         access_levels: &[AccessLevel::Public],
-        scope: None,
+        classpath: None,
         package: None,
     };
     let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");
@@ -636,7 +636,7 @@ fn search_dependency_type_filter() {
         offset: 0,
         dependency: Some("com.google.code.gson:gson:*"),
         access_levels: &[AccessLevel::Public],
-        scope: None,
+        classpath: None,
         package: None,
     };
     let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");
@@ -660,7 +660,7 @@ fn search_dependency_pagination() {
         offset: 0,
         dependency: Some("com.google.code.gson:gson:*"),
         access_levels: &[AccessLevel::Public],
-        scope: None,
+        classpath: None,
         package: None,
     };
     let page1 = cli::search::run(&project.project_dir, &sq).expect("search page 1 should succeed");
@@ -680,7 +680,7 @@ fn search_dependency_pagination() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn search_results_have_scopes() {
+fn search_results_have_classpaths() {
     let project = require_indexed_project!();
     let reader = IndexReader::open(&project.index_dir()).expect("index should be readable");
 
@@ -694,8 +694,8 @@ fn search_results_have_scopes() {
     assert!(!results.is_empty(), "should find ImmutableList");
     let result = &results[0];
     assert!(
-        !result.scopes.is_empty(),
-        "scopes should not be empty for {} (index may need rebuild with --force)",
+        !result.classpaths.is_empty(),
+        "classpaths should not be empty for {} (index may need rebuild with --force)",
         result.gav
     );
 }
@@ -986,7 +986,7 @@ fn search_package_standalone() {
         offset: 0,
         dependency: None,
         access_levels: &[AccessLevel::Public],
-        scope: None,
+        classpath: None,
         package: Some("com.google.gson"),
     };
     let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");
@@ -1020,7 +1020,7 @@ fn search_package_with_dependency() {
         offset: 0,
         dependency: Some("com.google.code.gson:gson:*"),
         access_levels: &[AccessLevel::Public],
-        scope: None,
+        classpath: None,
         package: Some("com.google.gson"),
     };
     let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");

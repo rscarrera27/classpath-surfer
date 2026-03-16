@@ -349,7 +349,7 @@ fn render_search_table(
     compact: bool,
 ) {
     // Adaptive detail height: 5 (compact), 6 (full), 7 (full + kotlin sigs)
-    // +1 for scope line (almost always present)
+    // +1 for classpath line (almost always present)
     let has_kotlin = state.results.iter().any(|r| r.signature.kotlin.is_some());
     let detail_height: u16 = if compact {
         5
@@ -489,17 +489,12 @@ fn render_detail_panel(frame: &mut Frame, area: Rect, result: &SearchResult, com
         Span::raw(result.gav.clone()),
     ]));
 
-    // Scope
-    if !result.scopes.is_empty() {
-        let scope_display = result
-            .scopes
-            .iter()
-            .map(|s| s.strip_suffix("Classpath").unwrap_or(s))
-            .collect::<Vec<_>>()
-            .join(", ");
+    // Classpath
+    if !result.classpaths.is_empty() {
+        let classpath_display = result.classpaths.join(", ");
         lines.push(Line::from(vec![
-            Span::styled("Scope: ", label_style),
-            Span::raw(scope_display),
+            Span::styled("Classpath: ", label_style),
+            Span::raw(classpath_display),
         ]));
     }
 

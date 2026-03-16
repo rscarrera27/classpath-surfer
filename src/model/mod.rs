@@ -352,9 +352,9 @@ pub struct SearchResult {
     /// Source language detected from the classfile SourceFile attribute.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_language: Option<SourceLanguage>,
-    /// Configuration scopes that include this symbol's dependency
-    /// (e.g. `["compileClasspath", "runtimeClasspath"]`).
-    pub scopes: Vec<String>,
+    /// Classpaths that include this symbol's dependency
+    /// (e.g. `["compile", "runtime"]`).
+    pub classpaths: Vec<String>,
 }
 
 impl SearchResult {
