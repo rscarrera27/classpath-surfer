@@ -45,7 +45,7 @@ fn incremental_indexing() {
 
     // 3. Incremental refresh (not full)
     let configs = common::default_configurations();
-    cli::refresh::run_with_java_home(&project_dir, &configs, false, Some(&java_home))
+    cli::refresh::run_with_java_home(&project_dir, &configs, false, Some(&java_home), 300)
         .expect("incremental refresh should succeed");
 
     // 4. Verify Gson is gone, ImmutableList still present

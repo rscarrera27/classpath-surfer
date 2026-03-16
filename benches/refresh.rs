@@ -94,8 +94,14 @@ fn bench_refresh(c: &mut Criterion) {
             },
             |(_temp, project_dir)| {
                 let configs = default_configurations();
-                cli::refresh::run_with_java_home(&project_dir, &configs, true, Some(&java_home))
-                    .unwrap();
+                cli::refresh::run_with_java_home(
+                    &project_dir,
+                    &configs,
+                    true,
+                    Some(&java_home),
+                    300,
+                )
+                .unwrap();
             },
         );
     });
@@ -108,8 +114,14 @@ fn bench_refresh(c: &mut Criterion) {
                 let project_dir = copy_fixture_project(temp.path());
                 cli::init::run(&project_dir).unwrap();
                 let configs = default_configurations();
-                cli::refresh::run_with_java_home(&project_dir, &configs, true, Some(&java_home))
-                    .unwrap();
+                cli::refresh::run_with_java_home(
+                    &project_dir,
+                    &configs,
+                    true,
+                    Some(&java_home),
+                    300,
+                )
+                .unwrap();
                 // Remove gson to trigger incremental diff
                 let app_build = project_dir.join("app/build.gradle");
                 let content = std::fs::read_to_string(&app_build).unwrap();
@@ -122,8 +134,14 @@ fn bench_refresh(c: &mut Criterion) {
                 (temp, project_dir, configs)
             },
             |(_temp, project_dir, configs)| {
-                cli::refresh::run_with_java_home(&project_dir, &configs, false, Some(&java_home))
-                    .unwrap();
+                cli::refresh::run_with_java_home(
+                    &project_dir,
+                    &configs,
+                    false,
+                    Some(&java_home),
+                    300,
+                )
+                .unwrap();
             },
         );
     });
@@ -135,10 +153,11 @@ fn bench_refresh(c: &mut Criterion) {
         let project_dir = copy_fixture_project(temp.path());
         cli::init::run(&project_dir).unwrap();
         let configs = default_configurations();
-        cli::refresh::run_with_java_home(&project_dir, &configs, true, Some(&java_home)).unwrap();
+        cli::refresh::run_with_java_home(&project_dir, &configs, true, Some(&java_home), 300)
+            .unwrap();
 
         b.iter(|| {
-            cli::refresh::run_with_java_home(&project_dir, &configs, false, Some(&java_home))
+            cli::refresh::run_with_java_home(&project_dir, &configs, false, Some(&java_home), 300)
                 .unwrap();
         });
     });

@@ -1,7 +1,8 @@
 //! Plain-text renderers for CLI output.
 //!
-//! These functions reproduce the original ASCII-table and text output that
-//! was previously inlined in each handler, used when stdout is not a TTY.
+//! These functions produce TAB-separated, machine-parseable output for use in
+//! pipes and non-TTY environments. Each line is a single record with fixed
+//! columns separated by `\t`, suitable for `cut`, `awk`, `sort`, and `grep`.
 
 use crate::model::{
     CleanOutput, DepsOutput, InitOutput, RefreshOutput, SearchOutput, ShowOutput, StatusOutput,
@@ -9,6 +10,8 @@ use crate::model::{
 };
 
 /// Render search results as a compact list (used when listing symbols without a query).
+///
+/// Columns: `FQN\tKIND\tSIGNATURE\tGAV`
 pub fn search_list(output: &SearchOutput) {
     let pattern = output.dependency.as_deref().unwrap_or("*");
 
@@ -27,11 +30,16 @@ pub fn search_list(output: &SearchOutput) {
     }
 
     for sym in &output.results {
-        println!("[{}] {}  {}", sym.symbol_kind, sym.fqn, sym.signature.java);
+        println!(
+            "{}\t{}\t{}\t{}",
+            sym.fqn, sym.symbol_kind, sym.signature.java, sym.gav
+        );
     }
 }
 
-/// Render search results as a plain-text ASCII table.
+/// Render search results as TAB-separated plain text.
+///
+/// Columns: `FQN\tKIND\tJAVA_SIG\tKOTLIN_SIG\tSOURCE\tLANG\tGAV\tSCOPE`
 pub fn search(output: &SearchOutput) {
     let query_display = output.query.as_deref().unwrap_or("*");
 
@@ -40,7 +48,6 @@ pub fn search(output: &SearchOutput) {
         return;
     }
 
-    // Show truncation notice if there are more matches than displayed
     if output.has_more {
         eprintln!(
             "Showing {} of {} matches for '{}'. Use --offset {} to see more.",
@@ -58,117 +65,24 @@ pub fn search(output: &SearchOutput) {
         );
     }
 
-    let has_kotlin = output.results.iter().any(|r| r.signature.kotlin.is_some());
-    let any_source = output.results.iter().any(|r| r.has_source());
-    let any_scopes = output.results.iter().any(|r| !r.scopes.is_empty());
-
-    // Column widths
-    let w_fqn = output
-        .results
-        .iter()
-        .map(|r| r.fqn.len())
-        .max()
-        .unwrap_or(6)
-        .clamp(6, 60);
-    let w_sig = output
-        .results
-        .iter()
-        .map(|r| r.signature.java.len())
-        .max()
-        .unwrap_or(14)
-        .clamp(14, 80);
-    let w_kt = if has_kotlin {
-        output
-            .results
-            .iter()
-            .filter_map(|r| r.signature.kotlin.as_ref())
-            .map(|s| s.len())
-            .max()
-            .unwrap_or(16)
-            .clamp(16, 80)
-    } else {
-        0
-    };
-    let w_src = 10; // "Decompiler"
-    let w_lang = 7; // "Clojure"
-    let w_scope = if any_scopes {
-        output
-            .results
-            .iter()
-            .map(|r| format_scopes(&r.scopes).len())
-            .max()
-            .unwrap_or(5)
-            .clamp(5, 30)
-    } else {
-        0
-    };
-
-    // Header
-    print!("{:<w_fqn$}  {:<w_sig$}", "Symbol", "Java Signature");
-    if has_kotlin {
-        print!("  {:<w_kt$}", "Kotlin Signature");
-    }
-    print!("  {:<w_src$}", "Src");
-    if any_source {
-        print!("  {:<w_lang$}", "Lang");
-    }
-    print!("  Dependency");
-    if any_scopes {
-        print!("  {:<w_scope$}", "Scope");
-    }
-    println!();
-
-    // Separator
-    print!("{:-<w_fqn$}  {:-<w_sig$}", "", "");
-    if has_kotlin {
-        print!("  {:-<w_kt$}", "");
-    }
-    print!("  {:-<w_src$}", "");
-    if any_source {
-        print!("  {:-<w_lang$}", "");
-    }
-    print!("  {:-<20}", "");
-    if any_scopes {
-        print!("  {:-<w_scope$}", "");
-    }
-    println!();
-
-    // Rows
     for r in &output.results {
-        let fqn_display = truncate_or_pad(&r.fqn, w_fqn);
-        let sig_display = truncate_or_pad(&r.signature.java, w_sig);
-
-        print!("{:<w_fqn$}  {:<w_sig$}", fqn_display, sig_display);
-
-        if has_kotlin {
-            let kt_display = truncate_or_pad(r.signature.kotlin.as_deref().unwrap_or(""), w_kt);
-            print!("  {:<w_kt$}", kt_display);
-        }
-
-        print!(
-            "  {:<w_src$}",
-            if r.has_source() {
-                "Source"
-            } else {
-                "Decompiled"
-            }
+        let kt_sig = r.signature.kotlin.as_deref().unwrap_or("");
+        let source = if r.has_source() {
+            "source"
+        } else {
+            "decompiled"
+        };
+        let lang = if r.has_source() {
+            let l = r.source_language.map(|l| l.to_string());
+            format_lang_display(l.as_deref().unwrap_or("java"))
+        } else {
+            ""
+        };
+        let scope = format_scopes(&r.scopes);
+        println!(
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            r.fqn, r.symbol_kind, r.signature.java, kt_sig, source, lang, r.gav, scope
         );
-
-        if any_source {
-            let lang = if r.has_source() {
-                let l = r.source_language.map(|l| l.to_string());
-                format_lang_display(l.as_deref().unwrap_or("java"))
-            } else {
-                ""
-            };
-            print!("  {:<w_lang$}", lang);
-        }
-
-        print!("  {}", r.gav);
-        if any_scopes {
-            print!("  {:<w_scope$}", format_scopes(&r.scopes));
-        }
-        println!();
     }
 }
 
@@ -269,7 +183,9 @@ pub fn clean(output: &CleanOutput) {
     }
 }
 
-/// Render dependency list as plain text.
+/// Render dependency list as TAB-separated plain text.
+///
+/// Columns: `GAV\tSYMBOL_COUNT\tSCOPE`
 pub fn deps(output: &DepsOutput) {
     if output.dependencies.is_empty() {
         if let Some(ref filter) = output.filter {
@@ -290,15 +206,12 @@ pub fn deps(output: &DepsOutput) {
     }
 
     for dep in &output.dependencies {
-        let scope_info = format_scopes(&dep.scopes);
-        if scope_info.is_empty() {
-            println!("{} ({} symbols)", dep.gav, dep.symbol_count);
-        } else {
-            println!(
-                "{} ({} symbols) [{}]",
-                dep.gav, dep.symbol_count, scope_info
-            );
-        }
+        println!(
+            "{}\t{}\t{}",
+            dep.gav,
+            dep.symbol_count,
+            format_scopes(&dep.scopes)
+        );
     }
 }
 
@@ -312,16 +225,4 @@ fn format_scopes(scopes: &[String]) -> String {
         .map(|s| s.strip_suffix("Classpath").unwrap_or(s))
         .collect::<Vec<_>>()
         .join("+")
-}
-
-fn truncate_or_pad(s: &str, max_width: usize) -> String {
-    if s.len() > max_width {
-        if max_width > 3 {
-            format!("{}...", &s[..max_width - 3])
-        } else {
-            s[..max_width].to_string()
-        }
-    } else {
-        s.to_string()
-    }
 }

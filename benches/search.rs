@@ -78,7 +78,7 @@ fn prepare_indexed_project() -> Option<(tempfile::TempDir, PathBuf)> {
         "compileClasspath".to_string(),
         "runtimeClasspath".to_string(),
     ];
-    cli::refresh::run_with_java_home(&project_dir, &configs, true, Some(&java_home)).ok()?;
+    cli::refresh::run_with_java_home(&project_dir, &configs, true, Some(&java_home), 300).ok()?;
 
     Some((temp, project_dir))
 }

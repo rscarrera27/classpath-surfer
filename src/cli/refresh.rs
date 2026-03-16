@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use anyhow::Result;
+use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::error::CliError;
 use crate::gradle::{init_script, runner};
@@ -18,8 +19,13 @@ use crate::staleness;
 ///
 /// When `force` is false and the index is not stale, the Gradle invocation
 /// is skipped entirely and an `up_to_date` result is returned immediately.
-pub fn run(project_dir: &Path, configurations: &[String], force: bool) -> Result<RefreshOutput> {
-    run_with_java_home(project_dir, configurations, force, None)
+pub fn run(
+    project_dir: &Path,
+    configurations: &[String],
+    force: bool,
+    timeout_secs: u64,
+) -> Result<RefreshOutput> {
+    run_with_java_home(project_dir, configurations, force, None, timeout_secs)
 }
 
 /// Same as [`run`], but allows overriding `JAVA_HOME` for the Gradle invocation.
@@ -28,6 +34,7 @@ pub fn run_with_java_home(
     configurations: &[String],
     force: bool,
     java_home: Option<&Path>,
+    timeout_secs: u64,
 ) -> Result<RefreshOutput> {
     let surfer_dir = project_dir.join(".classpath-surfer");
     std::fs::create_dir_all(&surfer_dir)?;
@@ -58,8 +65,25 @@ pub fn run_with_java_home(
         )
     })?;
 
-    eprintln!("Running Gradle to extract classpath...");
-    runner::run_export_task(project_dir, &init_script_path, configurations, java_home)?;
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.cyan} {msg}")
+            .unwrap(),
+    );
+    spinner.set_message("Running Gradle to extract classpath...");
+    spinner.enable_steady_tick(std::time::Duration::from_millis(120));
+
+    runner::run_export_task(
+        project_dir,
+        &init_script_path,
+        configurations,
+        java_home,
+        timeout_secs,
+    )?;
+
+    spinner.finish_and_clear();
+    eprintln!("Gradle export complete.");
 
     // 2. Merge per-module manifests
     let build_dir = project_dir.join("build");
@@ -84,18 +108,23 @@ pub fn run_with_java_home(
 
     let output = if force_full || !indexed_manifest_path.exists() {
         // Full index: index everything
-        eprintln!(
-            "Building full index for {} dependencies...",
-            unique_deps.len()
-        );
         // Clear existing index
         index_writer.delete_all_documents()?;
         index_writer.commit()?;
+
+        let progress = ProgressBar::new(unique_deps.len() as u64);
+        progress.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.cyan} [{bar:30.cyan/dim}] {pos}/{len} dependencies")
+                .unwrap()
+                .progress_chars("=> "),
+        );
 
         let mut total_symbols = 0;
         for dep in &unique_deps {
             if !dep.jar_path.exists() {
                 eprintln!("  warning: JAR not found: {}", dep.jar_path.display());
+                progress.inc(1);
                 continue;
             }
             let scopes_str = scope_map
@@ -105,15 +134,16 @@ pub fn run_with_java_home(
             match writer::index_dependency(&index_writer, &fields, dep, &scopes_str) {
                 Ok(count) => {
                     total_symbols += count;
-                    eprintln!("  indexed {} ({} symbols)", dep.gav(), count);
                 }
                 Err(e) => {
                     eprintln!("  warning: failed to index {}: {e}", dep.gav());
                 }
             }
+            progress.inc(1);
         }
 
         index_writer.commit()?;
+        progress.finish_and_clear();
         eprintln!(
             "Indexed {total_symbols} symbols from {} dependencies.",
             unique_deps.len()
@@ -155,15 +185,26 @@ pub fn run_with_java_home(
         }
 
         // Index new GAVs
+        let added_deps: Vec<_> = unique_deps
+            .iter()
+            .filter(|dep| manifest_diff.added.contains(&dep.gav()))
+            .collect();
+
+        let progress = ProgressBar::new(added_deps.len() as u64);
+        progress.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.cyan} [{bar:30.cyan/dim}] {pos}/{len} dependencies")
+                .unwrap()
+                .progress_chars("=> "),
+        );
+
         let mut total_symbols = 0;
         let mut deps_processed = 0;
-        for dep in &unique_deps {
-            if !manifest_diff.added.contains(&dep.gav()) {
-                continue;
-            }
+        for dep in &added_deps {
             deps_processed += 1;
             if !dep.jar_path.exists() {
                 eprintln!("  warning: JAR not found: {}", dep.jar_path.display());
+                progress.inc(1);
                 continue;
             }
             let scopes_str = scope_map
@@ -173,15 +214,16 @@ pub fn run_with_java_home(
             match writer::index_dependency(&index_writer, &fields, dep, &scopes_str) {
                 Ok(count) => {
                     total_symbols += count;
-                    eprintln!("  indexed {} ({} symbols)", dep.gav(), count);
                 }
                 Err(e) => {
                     eprintln!("  warning: failed to index {}: {e}", dep.gav());
                 }
             }
+            progress.inc(1);
         }
 
         index_writer.commit()?;
+        progress.finish_and_clear();
         eprintln!("Added {total_symbols} symbols.");
 
         RefreshOutput {

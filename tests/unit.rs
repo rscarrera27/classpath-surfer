@@ -284,7 +284,7 @@ fn refresh_invalid_project() {
     let project_dir = temp.path().join("nonexistent");
 
     let configs = vec!["compileClasspath".to_string()];
-    let result = cli::refresh::run_with_java_home(&project_dir, &configs, true, None);
+    let result = cli::refresh::run_with_java_home(&project_dir, &configs, true, None, 300);
     assert!(
         result.is_err(),
         "refresh on non-existent project should fail"

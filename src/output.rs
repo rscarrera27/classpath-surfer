@@ -21,18 +21,28 @@ pub enum OutputMode {
 impl OutputMode {
     /// Decide the output mode from CLI flags and TTY state.
     ///
-    /// - `--agentic` → [`OutputMode::Agentic`]
+    /// - `--agentic` / `--json` → [`OutputMode::Agentic`]
+    /// - `--plain`, `--no-color`, `NO_COLOR` env, `TERM=dumb` → [`OutputMode::Plain`]
     /// - stdout is a TTY → [`OutputMode::Tui`]
     /// - otherwise → [`OutputMode::Plain`]
-    pub fn detect(agentic: bool) -> Self {
+    pub fn detect(agentic: bool, plain: bool, no_color: bool) -> Self {
         if agentic {
-            Self::Agentic
-        } else if std::io::stdout().is_terminal() {
+            return Self::Agentic;
+        }
+        if plain || no_color || color_disabled_by_env() {
+            return Self::Plain;
+        }
+        if std::io::stdout().is_terminal() {
             Self::Tui
         } else {
             Self::Plain
         }
     }
+}
+
+/// Check if color is disabled via environment variables (`NO_COLOR` or `TERM=dumb`).
+fn color_disabled_by_env() -> bool {
+    std::env::var_os("NO_COLOR").is_some() || std::env::var("TERM").ok().as_deref() == Some("dumb")
 }
 
 /// Serialize `value` as pretty-printed JSON and write it to stdout.

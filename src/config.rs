@@ -1,7 +1,7 @@
 //! Per-project configuration.
 //!
 //! Loads and saves a JSON config file (`.classpath-surfer/config.json`) that
-//! controls decompiler selection, target Gradle configurations, and Java home.
+//! controls decompiler selection, target Gradle configurations, and timeouts.
 
 use std::path::{Path, PathBuf};
 
@@ -30,12 +30,14 @@ pub struct Config {
     /// Also settable via `--configurations`.
     #[serde(default = "default_configurations")]
     pub configurations: Vec<String>,
-    /// Override for `JAVA_HOME` used when running Gradle. Also settable via `--java-home`.
-    pub java_home: Option<PathBuf>,
     /// Never decompile — fail if no source JAR is available.
     /// Defaults to `false`. Also settable via `--no-decompile`.
     #[serde(default)]
     pub no_decompile: bool,
+    /// Timeout in seconds for Gradle execution.
+    /// Defaults to 300 (5 minutes). Also settable via `--timeout`.
+    #[serde(default)]
+    pub gradle_timeout: Option<u64>,
 }
 
 fn default_decompiler() -> Decompiler {
@@ -55,8 +57,8 @@ impl Default for Config {
             decompiler: default_decompiler(),
             decompiler_jar: None,
             configurations: default_configurations(),
-            java_home: None,
             no_decompile: false,
+            gradle_timeout: None,
         }
     }
 }
@@ -64,7 +66,6 @@ impl Default for Config {
 impl Config {
     /// Load configuration from `.classpath-surfer/config.json`.
     ///
-    /// Returns `Config::default()` when the file does not exist.
     /// Returns [`Config::default()`] when the file does not exist.
     pub fn load(project_dir: &Path) -> Result<Self> {
         let config_path = project_dir.join(".classpath-surfer/config.json");

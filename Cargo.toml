@@ -11,6 +11,14 @@ categories = ["command-line-utilities", "development-tools"]
 rust-version = "1.94"
 exclude = ["tests/fixtures/"]
 
+[[bin]]
+name = "classpath-surfer"
+path = "src/main.rs"
+
+[[bin]]
+name = "cpsurf"
+path = "src/main.rs"
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
@@ -28,6 +36,8 @@ prost = "0.14"
 ratatui = "0.30"
 crossterm = "0.29"
 syntect = { version = "5.3.0", features = ["yaml-load"] }
+ctrlc = { version = "3", features = ["termination"] }
+indicatif = "0.17"
 
 [build-dependencies]
 prost-build = "0.14"

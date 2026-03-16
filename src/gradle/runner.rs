@@ -1,18 +1,23 @@
 use std::path::Path;
 use std::process::Command;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 
 use crate::error::CliError;
 
-/// Run the Gradle `classpathSurferExport` task.
+/// Run the Gradle `classpathSurferExport` task with a timeout.
 ///
 /// If `java_home` is provided, sets `JAVA_HOME` for the Gradle process.
+/// The child process is killed on Ctrl-C (SIGINT) or when the timeout expires.
 pub fn run_export_task(
     project_dir: &Path,
     init_script_path: &Path,
     configurations: &[String],
     java_home: Option<&Path>,
+    timeout_secs: u64,
 ) -> Result<()> {
     let gradle_cmd = find_gradle(project_dir);
 
@@ -30,22 +35,62 @@ pub fn run_export_task(
         cmd.env("JAVA_HOME", java_home);
     }
 
-    let status = cmd
-        .status()
-        .with_context(|| format!("running {gradle_cmd}"))?;
+    let mut child = cmd
+        .spawn()
+        .with_context(|| format!("spawning {gradle_cmd}"))?;
 
-    if !status.success() {
-        return Err(CliError::transient(
-            "GRADLE_FAILED",
-            format!(
-                "Gradle task failed with exit code: {}",
-                status.code().unwrap_or(-1)
-            ),
-        )
-        .into());
+    // Ctrl-C flag — the handler sets this so the main loop can react
+    let interrupted = Arc::new(AtomicBool::new(false));
+    let interrupted_clone = Arc::clone(&interrupted);
+    let _ = ctrlc::set_handler(move || {
+        interrupted_clone.store(true, Ordering::SeqCst);
+    });
+
+    // Poll child with timeout
+    let timeout = Duration::from_secs(timeout_secs);
+    let start = std::time::Instant::now();
+    loop {
+        // Check Ctrl-C
+        if interrupted.load(Ordering::SeqCst) {
+            let _ = child.kill();
+            let _ = child.wait();
+            std::process::exit(130);
+        }
+
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    return Err(CliError::transient(
+                        "GRADLE_FAILED",
+                        format!(
+                            "Gradle task failed with exit code: {}",
+                            status.code().unwrap_or(-1)
+                        ),
+                    )
+                    .into());
+                }
+                return Ok(());
+            }
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(CliError::transient(
+                        "GRADLE_TIMEOUT",
+                        format!(
+                            "Gradle task timed out after {timeout_secs} seconds. \
+                             Use --timeout to increase the limit."
+                        ),
+                    )
+                    .into());
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => {
+                return Err(anyhow::Error::new(e).context(format!("waiting for {gradle_cmd}")));
+            }
+        }
     }
-
-    Ok(())
 }
 
 fn find_gradle(project_dir: &Path) -> String {

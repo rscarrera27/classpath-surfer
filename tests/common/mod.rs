@@ -166,7 +166,7 @@ pub fn set_gradle_version(project_dir: &Path, version: &str) {
 /// Run refresh with a specific JAVA_HOME (full mode).
 pub fn refresh_with_java_home(project_dir: &Path, java_home: &Path) {
     let configs = default_configurations();
-    cli::refresh::run_with_java_home(project_dir, &configs, true, Some(java_home))
+    cli::refresh::run_with_java_home(project_dir, &configs, true, Some(java_home), 300)
         .expect("refresh should succeed");
 }
 

@@ -9,17 +9,33 @@ use classpath_surfer::model::{AccessLevel, SearchQuery, SymbolKind};
 use classpath_surfer::output::{self, OutputMode};
 use classpath_surfer::source::decompiler::Decompiler;
 
+/// Build a long version string including the git SHA.
+fn long_version() -> &'static str {
+    concat!(env!("CARGO_PKG_VERSION"), " (", env!("GIT_SHA"), ")")
+}
+
 #[derive(Parser)]
-#[command(name = "classpath-surfer", version)]
+#[command(name = "classpath-surfer", version, long_version = long_version())]
 #[command(about = "Fast dependency symbol search for Gradle Java/Kotlin projects")]
+#[command(after_help = "\
+Repository: https://github.com/rscarrera27/classpath-surfer
+Bug reports: https://github.com/rscarrera27/classpath-surfer/issues")]
 struct Cli {
     /// Project directory
     #[arg(long, global = true, default_value = ".")]
     project_dir: PathBuf,
 
     /// Emit structured JSON output for AI agents and scripts
-    #[arg(long, global = true)]
+    #[arg(long, visible_alias = "json", global = true)]
     agentic: bool,
+
+    /// Force plain text output even in a TTY
+    #[arg(long, global = true)]
+    plain: bool,
+
+    /// Disable colored output
+    #[arg(long, global = true)]
+    no_color: bool,
 
     #[command(subcommand)]
     command: Commands,
@@ -40,20 +56,60 @@ struct Pagination {
 #[derive(Subcommand)]
 enum Commands {
     /// Install Gradle init script, default config, and run initial refresh
+    #[command(
+        long_about = "Install Gradle init script, default config, and run initial refresh.\n\n\
+            Creates the .classpath-surfer/ directory, writes config.json and the Gradle\n\
+            init script, updates .gitignore, and performs the first index build.",
+        after_help = "\
+EXAMPLES:
+  classpath-surfer init
+  cpsurf init --project-dir /path/to/project"
+    )]
     Init,
 
     /// Extract classpath from Gradle and build/update the symbol index
+    #[command(
+        long_about = "Extract classpath from Gradle and build/update the symbol index.\n\n\
+            Runs the Gradle classpathSurferExport task, merges per-module manifests,\n\
+            computes a GAV-level diff, and performs incremental or full reindexing.\n\
+            Skips Gradle if the index is fresh (unless --force is used).",
+        after_help = "\
+EXAMPLES:
+  classpath-surfer refresh
+  classpath-surfer refresh --force
+  classpath-surfer refresh --configurations compileClasspath
+  classpath-surfer refresh --timeout 600"
+    )]
     Refresh {
         /// Gradle configurations to resolve (comma-separated)
         #[arg(long, value_delimiter = ',')]
         configurations: Vec<String>,
 
         /// Force Gradle re-run and full re-index, ignoring cached state
-        #[arg(long)]
+        #[arg(long, short = 'f')]
         force: bool,
+
+        /// Timeout in seconds for Gradle execution (default: 300)
+        #[arg(long)]
+        timeout: Option<u64>,
     },
 
     /// Search for symbols in indexed dependencies
+    #[command(
+        long_about = "Search for symbols in indexed dependencies.\n\n\
+            Supports fuzzy text search, exact FQN matching (--fqn), and regex patterns\n\
+            (--regex). Results can be filtered by symbol type, access level, dependency\n\
+            GAV pattern, and configuration scope. When --dependency is used without a\n\
+            query, lists all symbols in matching dependencies.",
+        after_help = "\
+EXAMPLES:
+  classpath-surfer search ImmutableList
+  classpath-surfer search --fqn com.google.common.collect.ImmutableList
+  classpath-surfer search --regex 'Immutable.*List'
+  classpath-surfer search --dependency 'com.google.*:guava:*'
+  classpath-surfer search ImmutableList --type class --access public,protected
+  classpath-surfer search ImmutableList --agentic"
+    )]
     Search {
         /// Symbol name or pattern to search (optional when --dependency is set)
         query: Option<String>,
@@ -92,6 +148,19 @@ enum Commands {
     },
 
     /// Show source code for a specific symbol
+    #[command(
+        long_about = "Show source code for a specific symbol.\n\n\
+            Resolves the symbol from the index, loads source from a source JAR or by\n\
+            decompiling the class file, and displays with line numbers. By default,\n\
+            focuses on the symbol with --context lines of surrounding code. Use --full\n\
+            to display the entire source file.",
+        after_help = "\
+EXAMPLES:
+  classpath-surfer show com.google.gson.Gson
+  classpath-surfer show com.google.gson.Gson.fromJson --context 10
+  classpath-surfer show com.google.gson.Gson --full
+  classpath-surfer show com.google.gson.Gson --no-decompile"
+    )]
     Show {
         /// Fully qualified name of the symbol
         fqn: String,
@@ -118,6 +187,17 @@ enum Commands {
     },
 
     /// List indexed dependencies with symbol counts
+    #[command(
+        long_about = "List indexed dependencies with symbol counts.\n\n\
+            Shows GAV coordinates, symbol counts, and configuration scopes for all\n\
+            indexed dependencies. Supports GAV pattern filtering and pagination.",
+        after_help = "\
+EXAMPLES:
+  classpath-surfer deps
+  classpath-surfer deps --filter 'com.google.*:*'
+  classpath-surfer deps --scope compileClasspath
+  classpath-surfer deps --limit 10 --offset 20"
+    )]
     Deps {
         /// Filter dependencies by GAV pattern (e.g., "com.google.*:*")
         #[arg(long)]
@@ -132,15 +212,33 @@ enum Commands {
     },
 
     /// Show index status
+    #[command(
+        long_about = "Show index status.\n\n\
+            Reports initialization state, dependency counts, indexed symbol count,\n\
+            staleness, and index disk size.",
+        after_help = "\
+EXAMPLES:
+  classpath-surfer status
+  classpath-surfer status --agentic"
+    )]
     Status,
 
     /// Remove index data
+    #[command(
+        long_about = "Remove index data.\n\n\
+            Deletes the Tantivy index directory, indexed manifest, and staleness\n\
+            markers. The .classpath-surfer/ directory and config.json are preserved.\n\
+            Safe to run multiple times (idempotent).",
+        after_help = "\
+EXAMPLES:
+  classpath-surfer clean"
+    )]
     Clean,
 }
 
 fn main() {
     let cli = Cli::parse();
-    let output_mode = OutputMode::detect(cli.agentic);
+    let output_mode = OutputMode::detect(cli.agentic, cli.plain, cli.no_color);
 
     let project_dir = match std::fs::canonicalize(&cli.project_dir) {
         Ok(p) => p,
@@ -174,15 +272,17 @@ fn main() {
         Commands::Refresh {
             configurations,
             force,
+            timeout,
         } => {
             let configs = if configurations.is_empty() {
                 config.configurations.clone()
             } else {
                 configurations
             };
+            let timeout_secs = timeout.or(config.gradle_timeout).unwrap_or(300);
             render(
                 output_mode,
-                cli::refresh::run(&project_dir, &configs, force),
+                cli::refresh::run(&project_dir, &configs, force, timeout_secs),
                 cli::render::refresh,
                 None::<fn(&_) -> anyhow::Result<()>>,
             )

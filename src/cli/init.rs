@@ -64,7 +64,7 @@ pub fn run(project_dir: &Path) -> Result<InitOutput> {
         .iter()
         .map(|s| s.to_string())
         .collect();
-    match refresh::run(project_dir, &default_configs, false) {
+    match refresh::run(project_dir, &default_configs, false, 300) {
         Ok(refresh_output) => {
             actions.push(format!(
                 "Initial refresh: {} mode, {} dependencies, {} symbols",
