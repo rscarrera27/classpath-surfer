@@ -130,6 +130,16 @@ impl IndexReader {
             clauses.push((Occur::Must, filter));
         }
 
+        // Package filter
+        if let Some(pkg) = sq.package {
+            if let Some(filter) = self.build_package_filter(&schema, pkg)? {
+                clauses.push((Occur::Must, filter));
+            } else {
+                // Empty match — no results possible
+                return Ok((vec![], 0, matched_gavs));
+            }
+        }
+
         let combined = BooleanQuery::new(clauses);
 
         let (mut results, total_count) = if is_listing {
@@ -243,6 +253,55 @@ impl IndexReader {
                 ))),
                 vec![dep.to_string()],
             ))
+        }
+    }
+
+    /// Build a package filter query from a package pattern.
+    ///
+    /// Returns `None` when a glob pattern matches zero packages (caller should
+    /// short-circuit with no results).
+    fn build_package_filter(
+        &self,
+        schema: &Schema,
+        pattern: &str,
+    ) -> Result<Option<Box<dyn tantivy::query::Query>>> {
+        let pkg_field = schema.get_field("package").unwrap();
+        if pattern.contains('*') {
+            let searcher = self.reader.searcher();
+            let mut pkg_set: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+            for segment_reader in searcher.segment_readers() {
+                let inverted_index = segment_reader.inverted_index(pkg_field)?;
+                let mut term_stream = inverted_index.terms().stream()?;
+                while term_stream.advance() {
+                    let term_bytes = term_stream.key();
+                    if let Ok(term_str) = std::str::from_utf8(term_bytes)
+                        && matches_gav_pattern(term_str, pattern)
+                    {
+                        pkg_set.insert(term_str.to_string());
+                    }
+                }
+            }
+            if pkg_set.is_empty() {
+                return Ok(None);
+            }
+            let pkg_clauses: Vec<(Occur, Box<dyn tantivy::query::Query>)> = pkg_set
+                .into_iter()
+                .map(|p| {
+                    (
+                        Occur::Should,
+                        Box::new(TermQuery::new(
+                            tantivy::Term::from_field_text(pkg_field, &p),
+                            IndexRecordOption::Basic,
+                        )) as Box<dyn tantivy::query::Query>,
+                    )
+                })
+                .collect();
+            Ok(Some(Box::new(BooleanQuery::new(pkg_clauses))))
+        } else {
+            Ok(Some(Box::new(TermQuery::new(
+                tantivy::Term::from_field_text(pkg_field, pattern),
+                IndexRecordOption::Basic,
+            ))))
         }
     }
 

@@ -123,6 +123,7 @@ pub fn run(project_dir: &Path, filter: Option<&str>, scope: Option<&str>) -> Res
                         dependency: Some(selected_gav),
                         access_levels: &[],
                         scope,
+                        package: None,
                     };
 
                     // Drill down into search TUI, sharing our guard

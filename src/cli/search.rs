@@ -20,6 +20,7 @@ pub fn run(project_dir: &Path, query: &SearchQuery) -> Result<SearchOutput> {
     Ok(SearchOutput {
         query: query.query.map(|s| s.to_string()),
         dependency: query.dependency.map(|s| s.to_string()),
+        package: query.package.map(|s| s.to_string()),
         matched_gavs,
         total_matches,
         offset: query.offset,

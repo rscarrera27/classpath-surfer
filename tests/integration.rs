@@ -538,6 +538,7 @@ fn search_dependency_lists_symbols() {
         dependency: Some("com.google.code.gson:gson:*"),
         access_levels: &[AccessLevel::Public],
         scope: None,
+        package: None,
     };
     let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");
     assert!(
@@ -563,6 +564,7 @@ fn search_dependency_type_filter() {
         dependency: Some("com.google.code.gson:gson:*"),
         access_levels: &[AccessLevel::Public],
         scope: None,
+        package: None,
     };
     let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");
     for sym in &output.results {
@@ -588,6 +590,7 @@ fn search_dependency_pagination() {
         dependency: Some("com.google.code.gson:gson:*"),
         access_levels: &[AccessLevel::Public],
         scope: None,
+        package: None,
     };
     let page1 = cli::search::run(&project.project_dir, &sq).expect("search page 1 should succeed");
 
@@ -844,4 +847,139 @@ fn show_method_with_full_flag() {
             "full mode should not have #L fragment"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Package filter tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn search_package_exact() {
+    let project = require_indexed_project!();
+    let reader = IndexReader::open(&project.index_dir()).unwrap();
+
+    let (results, count, _) = reader
+        .search(&SearchQuery {
+            limit: 50,
+            package: Some("com.google.gson"),
+            ..SearchQuery::simple("Gson")
+        })
+        .unwrap();
+
+    assert!(count > 0, "should find symbols in com.google.gson package");
+    for r in &results {
+        assert!(
+            r.fqn.starts_with("com.google.gson."),
+            "result FQN should be in com.google.gson package, got: {}",
+            r.fqn
+        );
+    }
+}
+
+#[test]
+fn search_package_wildcard() {
+    let project = require_indexed_project!();
+    let reader = IndexReader::open(&project.index_dir()).unwrap();
+
+    // com.google.common.* matches com.google.common.collect, com.google.common.base, etc.
+    let (results, count, _) = reader
+        .search(&SearchQuery {
+            limit: 50,
+            package: Some("com.google.common.*"),
+            ..SearchQuery::simple("Immutable")
+        })
+        .unwrap();
+
+    assert!(
+        count > 0,
+        "should find symbols in com.google.common.* packages"
+    );
+    for r in &results {
+        assert!(
+            r.fqn.starts_with("com.google.common."),
+            "result FQN should be in com.google.common.* package, got: {}",
+            r.fqn
+        );
+    }
+}
+
+#[test]
+fn search_package_standalone() {
+    let project = require_indexed_project!();
+
+    // Package alone (no query, no dependency) should list all symbols in that package
+    let sq = SearchQuery {
+        query: None,
+        symbol_types: &[SymbolKind::Class],
+        fqn_mode: false,
+        regex_mode: false,
+        limit: 50,
+        offset: 0,
+        dependency: None,
+        access_levels: &[AccessLevel::Public],
+        scope: None,
+        package: Some("com.google.gson"),
+    };
+    let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");
+    assert!(
+        !output.results.is_empty(),
+        "should find classes in com.google.gson"
+    );
+    for r in &output.results {
+        assert!(
+            r.fqn.starts_with("com.google.gson."),
+            "result should be in com.google.gson package, got: {}",
+            r.fqn
+        );
+    }
+    assert_eq!(
+        output.package.as_deref(),
+        Some("com.google.gson"),
+        "output should echo the package filter"
+    );
+}
+
+#[test]
+fn search_package_with_dependency() {
+    let project = require_indexed_project!();
+
+    // Combine --package with --dependency
+    let sq = SearchQuery {
+        query: None,
+        symbol_types: &[SymbolKind::Class],
+        fqn_mode: false,
+        regex_mode: false,
+        limit: 50,
+        offset: 0,
+        dependency: Some("com.google.code.gson:gson:*"),
+        access_levels: &[AccessLevel::Public],
+        scope: None,
+        package: Some("com.google.gson"),
+    };
+    let output = cli::search::run(&project.project_dir, &sq).expect("search should succeed");
+    assert!(!output.results.is_empty(), "should find classes in gson");
+    for r in &output.results {
+        assert!(
+            r.fqn.starts_with("com.google.gson."),
+            "result should be in com.google.gson package, got: {}",
+            r.fqn
+        );
+    }
+}
+
+#[test]
+fn search_package_no_match() {
+    let project = require_indexed_project!();
+    let reader = IndexReader::open(&project.index_dir()).unwrap();
+
+    let (results, count, _) = reader
+        .search(&SearchQuery {
+            limit: 10,
+            package: Some("com.nonexistent.package.xyz"),
+            ..SearchQuery::simple("Foo")
+        })
+        .unwrap();
+
+    assert_eq!(count, 0, "non-existent package should return 0 results");
+    assert!(results.is_empty());
 }

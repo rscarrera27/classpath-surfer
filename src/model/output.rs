@@ -36,6 +36,8 @@ pub struct SearchQuery<'a> {
     pub access_levels: &'a [AccessLevel],
     /// Filter results to a specific configuration scope (e.g. `"compileClasspath"`).
     pub scope: Option<&'a str>,
+    /// Filter results by Java package pattern (glob with `*` wildcards, e.g. `"com.google.common.*"`).
+    pub package: Option<&'a str>,
 }
 
 impl<'a> SearchQuery<'a> {
@@ -51,6 +53,7 @@ impl<'a> SearchQuery<'a> {
             dependency: None,
             access_levels: &[],
             scope: None,
+            package: None,
         }
     }
 
@@ -72,6 +75,9 @@ pub struct SearchOutput {
     /// GAV pattern used to filter dependencies (`None` when searching all dependencies).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependency: Option<String>,
+    /// Package pattern used to filter results (`None` when no package filter was applied).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package: Option<String>,
     /// GAVs that matched the dependency pattern (`None` when no pattern was used).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matched_gavs: Option<Vec<String>>,

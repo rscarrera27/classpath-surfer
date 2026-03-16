@@ -297,6 +297,7 @@ fn lookup_member_info(project_dir: &Path, fqn: &str) -> Option<(SymbolKind, Stri
         dependency: None,
         access_levels: &[],
         scope: None,
+        package: None,
     };
     let (results, _, _) = reader.search(&query).ok()?;
     let result = results.first()?;

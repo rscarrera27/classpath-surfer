@@ -16,7 +16,11 @@ pub fn search_list(output: &SearchOutput) {
     let pattern = output.dependency.as_deref().unwrap_or("*");
 
     if output.results.is_empty() {
-        println!("No symbols found for '{pattern}'.");
+        if let Some(ref pkg) = output.package {
+            println!("No symbols found for '{pattern}' in package '{pkg}'.");
+        } else {
+            println!("No symbols found for '{pattern}'.");
+        }
         return;
     }
 
@@ -44,7 +48,14 @@ pub fn search(output: &SearchOutput) {
     let query_display = output.query.as_deref().unwrap_or("*");
 
     if output.results.is_empty() {
-        println!("No matches found for '{}'.", query_display);
+        if let Some(ref pkg) = output.package {
+            println!(
+                "No matches found for '{}' in package '{}'.",
+                query_display, pkg
+            );
+        } else {
+            println!("No matches found for '{}'.", query_display);
+        }
         return;
     }
 

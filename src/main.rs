@@ -99,14 +99,15 @@ EXAMPLES:
         long_about = "Search for symbols in indexed dependencies.\n\n\
             Supports fuzzy text search, exact FQN matching (--fqn), and regex patterns\n\
             (--regex). Results can be filtered by symbol type, access level, dependency\n\
-            GAV pattern, and configuration scope. When --dependency is used without a\n\
-            query, lists all symbols in matching dependencies.",
+            GAV pattern, Java package pattern, and configuration scope. When --dependency\n\
+            or --package is used without a query, lists all symbols in matching entries.",
         after_help = "\
 EXAMPLES:
   classpath-surfer search ImmutableList
   classpath-surfer search --fqn com.google.common.collect.ImmutableList
   classpath-surfer search --regex 'Immutable.*List'
   classpath-surfer search --dependency 'com.google.*:guava:*'
+  classpath-surfer search --package 'com.google.common.collect'
   classpath-surfer search ImmutableList --type class --access public,protected
   classpath-surfer search ImmutableList --agentic"
     )]
@@ -145,6 +146,10 @@ EXAMPLES:
         /// Filter by configuration scope (e.g., compileClasspath, runtimeClasspath)
         #[arg(long)]
         scope: Option<String>,
+
+        /// Filter by Java package pattern (glob supported, e.g., "com.google.common.*")
+        #[arg(long)]
+        package: Option<String>,
     },
 
     /// Show source code for a specific symbol
@@ -297,12 +302,13 @@ fn main() {
             access,
             dependency,
             scope,
+            package,
         } => {
-            // Validate: at least one of query or dependency must be provided
-            if query.is_none() && dependency.is_none() {
+            // Validate: at least one of query, dependency, or package must be provided
+            if query.is_none() && dependency.is_none() && package.is_none() {
                 let err: anyhow::Error = CliError::usage(
                     "MISSING_QUERY",
-                    "Either a search query or --dependency must be provided.",
+                    "Either a search query, --dependency, or --package must be provided.",
                 )
                 .into();
                 if output_mode == OutputMode::Agentic {
@@ -332,6 +338,7 @@ fn main() {
                     access_levels: &access_levels,
                     offset: 0,
                     scope: scope.as_deref(),
+                    package: package.as_deref(),
                 };
                 cli::require_index(&project_dir).and_then(|()| {
                     classpath_surfer::tui::search::run_interactive(&project_dir, &sq)
@@ -348,6 +355,7 @@ fn main() {
                     access_levels: &access_levels,
                     offset,
                     scope: scope.as_deref(),
+                    package: package.as_deref(),
                 };
                 let plain_renderer = if is_listing {
                     cli::render::search_list

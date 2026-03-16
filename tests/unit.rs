@@ -268,6 +268,7 @@ fn search_without_index() {
             access_levels: &[],
             offset: 0,
             scope: None,
+            package: None,
         },
     );
     assert!(result.is_err(), "search without index should fail");
@@ -309,6 +310,7 @@ fn agentic_error_output() {
             access_levels: &[],
             offset: 0,
             scope: None,
+            package: None,
         },
     );
     let err = result.unwrap_err();
@@ -345,6 +347,7 @@ fn agentic_exit_codes() {
             access_levels: &[],
             offset: 0,
             scope: None,
+            package: None,
         },
     );
     let err = result.unwrap_err();

@@ -240,3 +240,57 @@ fn agentic_show_full_flag() {
         "full mode should not have #L fragment: {path}"
     );
 }
+
+#[test]
+fn agentic_search_package_filter() {
+    let project = require_indexed_project!();
+    let output = common::cli_cmd(&project.project_dir)
+        .args([
+            "search",
+            "Gson",
+            "--package",
+            "com.google.gson",
+            "--agentic",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "exit code should be 0, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .expect("stdout should be valid JSON in agentic mode");
+    assert_eq!(json["package"], "com.google.gson");
+    assert!(json["total_matches"].as_u64().unwrap() > 0);
+    assert!(!json["results"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn agentic_search_package_standalone() {
+    let project = require_indexed_project!();
+    let output = common::cli_cmd(&project.project_dir)
+        .args([
+            "search",
+            "--package",
+            "com.google.gson",
+            "--agentic",
+            "--type",
+            "class",
+        ])
+        .output()
+        .unwrap();
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "exit code should be 0, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout)
+        .expect("stdout should be valid JSON in agentic mode");
+    assert_eq!(json["package"], "com.google.gson");
+    assert!(json["total_matches"].as_u64().unwrap() > 0);
+}
