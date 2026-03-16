@@ -29,37 +29,45 @@ allprojects { project ->
 
                     def configs = []
 
+                    // Phase 1: Collect binary artifacts from all configurations
+                    def allBinaryArtifacts = [:]  // GAV -> info (shared across configs)
+                    def configBinaryKeys = [:]    // configName -> list of GAV keys
+
                     configNames.each { configName ->
                         configName = configName.trim()
                         def config = project.configurations.findByName(configName)
                         if (config == null || !config.isCanBeResolved()) return
 
-                        def deps = []
-                        def binaryArtifacts = [:]
-
+                        def keys = []
                         try {
                             config.incoming.artifacts.artifacts.each { artifact ->
                                 def componentId = artifact.id.componentIdentifier
                                 if (componentId instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier) {
                                     def key = "${componentId.group}:${componentId.module}:${componentId.version}"
-                                    binaryArtifacts[key] = [
-                                        group: componentId.group,
-                                        artifact: componentId.module,
-                                        version: componentId.version,
-                                        jar_path: artifact.file.absolutePath
-                                    ]
+                                    if (!allBinaryArtifacts.containsKey(key)) {
+                                        allBinaryArtifacts[key] = [
+                                            group: componentId.group,
+                                            artifact: componentId.module,
+                                            version: componentId.version,
+                                            jar_path: artifact.file.absolutePath
+                                        ]
+                                    }
+                                    keys.add(key)
                                 }
                             }
                         } catch (Exception e) {
                             project.logger.warn("classpath-surfer: Could not resolve ${configName}: ${e.message}")
                             return
                         }
+                        configBinaryKeys[configName] = keys
+                    }
 
-                        // Resolve source JARs via detached configuration (best-effort)
-                        def sourceFiles = [:]
+                    // Phase 2: Single source JAR resolution for all collected artifacts
+                    def sourceFiles = [:]
+                    if (!allBinaryArtifacts.isEmpty()) {
                         try {
                             def sourceConfig = project.configurations.detachedConfiguration()
-                            binaryArtifacts.each { key, info ->
+                            allBinaryArtifacts.each { key, info ->
                                 sourceConfig.dependencies.add(
                                     project.dependencies.create("${info.group}:${info.artifact}:${info.version}:sources")
                                 )
@@ -74,14 +82,17 @@ allprojects { project ->
                         } catch (Exception e) {
                             project.logger.info("classpath-surfer: Could not resolve some source JARs: ${e.message}")
                         }
+                    }
 
-                        // Merge binary + source info
-                        binaryArtifacts.each { key, info ->
+                    // Phase 3: Build per-config manifests using shared source mappings
+                    configBinaryKeys.each { configName, keys ->
+                        def deps = []
+                        keys.each { key ->
+                            def info = allBinaryArtifacts[key].clone()
                             info['source_jar_path'] = sourceFiles[key]
                             info['classpath'] = configName
                             deps.add(info)
                         }
-
                         configs.add([
                             name: configName,
                             dependencies: deps

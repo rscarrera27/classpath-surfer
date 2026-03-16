@@ -14,8 +14,10 @@
 //! ```
 
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{Context, Result};
+use rayon::prelude::*;
 use tantivy::schema::*;
 use tantivy::{Index, IndexWriter, doc};
 
@@ -185,6 +187,9 @@ pub fn delete_gav(writer: &IndexWriter, fields: &SchemaFields, gav: &str) -> Res
 }
 
 /// Index all symbols from a single dependency JAR.
+///
+/// Collects all `.class` entries into memory, then parses and indexes them
+/// in parallel using rayon.
 pub fn index_dependency(
     writer: &IndexWriter,
     fields: &SchemaFields,
@@ -201,32 +206,36 @@ pub fn index_dependency(
         jar::SourceTable::new()
     };
 
-    let mut count = 0;
+    let class_files = jar::collect_class_files(&dep.jar_path)?;
+    let count = AtomicUsize::new(0);
 
-    jar::process_class_files(&dep.jar_path, |class_path, class_bytes| {
-        let symbols = match classfile::extract_symbols(class_bytes, &gav) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("  warning: failed to parse {class_path}: {e}");
-                return Ok(());
-            }
-        };
-
-        for mut symbol in symbols {
-            if dep_has_source && let Some(sfn) = symbol.source.source_file_name() {
-                let key = (symbol.package.clone(), sfn.to_string());
-                if let Some(entry) = source_table.get(&key) {
-                    symbol.source = symbol.source.with_source_jar(entry.path.clone());
+    class_files
+        .par_iter()
+        .for_each(|(class_path, class_bytes)| {
+            let symbols = match classfile::extract_symbols(class_bytes, &gav) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("  warning: failed to parse {class_path}: {e}");
+                    return;
                 }
+            };
+
+            for mut symbol in symbols {
+                if dep_has_source && let Some(sfn) = symbol.source.source_file_name() {
+                    let key = (symbol.package.clone(), sfn.to_string());
+                    if let Some(entry) = source_table.get(&key) {
+                        symbol.source = symbol.source.with_source_jar(entry.path.clone());
+                    }
+                }
+
+                if let Err(e) = add_symbol_doc(writer, fields, &symbol, classpaths) {
+                    eprintln!("  warning: failed to add symbol {}: {e}", symbol.fqn);
+                }
+                count.fetch_add(1, Ordering::Relaxed);
             }
+        });
 
-            add_symbol_doc(writer, fields, &symbol, classpaths)?;
-            count += 1;
-        }
-        Ok(())
-    })?;
-
-    Ok(count)
+    Ok(count.load(Ordering::Relaxed))
 }
 
 fn add_symbol_doc(

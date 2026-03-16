@@ -1,7 +1,9 @@
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
+use rayon::prelude::*;
 
 use crate::error::CliError;
 use crate::gradle::{init_script, runner};
@@ -120,12 +122,12 @@ pub fn run_with_java_home(
                 .progress_chars("=> "),
         );
 
-        let mut total_symbols = 0;
-        for dep in &unique_deps {
+        let total_symbols = AtomicUsize::new(0);
+        unique_deps.par_iter().for_each(|dep| {
             if !dep.jar_path.exists() {
                 eprintln!("  warning: JAR not found: {}", dep.jar_path.display());
                 progress.inc(1);
-                continue;
+                return;
             }
             let classpaths_str = classpath_map
                 .get(&dep.gav())
@@ -133,15 +135,16 @@ pub fn run_with_java_home(
                 .unwrap_or_default();
             match writer::index_dependency(&index_writer, &fields, dep, &classpaths_str) {
                 Ok(count) => {
-                    total_symbols += count;
+                    total_symbols.fetch_add(count, Ordering::Relaxed);
                 }
                 Err(e) => {
                     eprintln!("  warning: failed to index {}: {e}", dep.gav());
                 }
             }
             progress.inc(1);
-        }
+        });
 
+        let total_symbols = total_symbols.load(Ordering::Relaxed);
         index_writer.commit()?;
         progress.finish_and_clear();
         eprintln!(
@@ -198,14 +201,13 @@ pub fn run_with_java_home(
                 .progress_chars("=> "),
         );
 
-        let mut total_symbols = 0;
-        let mut deps_processed = 0;
-        for dep in &added_deps {
-            deps_processed += 1;
+        let total_symbols = AtomicUsize::new(0);
+        let deps_processed = added_deps.len();
+        added_deps.par_iter().for_each(|dep| {
             if !dep.jar_path.exists() {
                 eprintln!("  warning: JAR not found: {}", dep.jar_path.display());
                 progress.inc(1);
-                continue;
+                return;
             }
             let classpaths_str = classpath_map
                 .get(&dep.gav())
@@ -213,14 +215,15 @@ pub fn run_with_java_home(
                 .unwrap_or_default();
             match writer::index_dependency(&index_writer, &fields, dep, &classpaths_str) {
                 Ok(count) => {
-                    total_symbols += count;
+                    total_symbols.fetch_add(count, Ordering::Relaxed);
                 }
                 Err(e) => {
                     eprintln!("  warning: failed to index {}: {e}", dep.gav());
                 }
             }
             progress.inc(1);
-        }
+        });
+        let total_symbols = total_symbols.load(Ordering::Relaxed);
 
         index_writer.commit()?;
         progress.finish_and_clear();

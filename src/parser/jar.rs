@@ -58,6 +58,30 @@ pub fn process_class_files(
     Ok(())
 }
 
+/// Collect all `.class` file entries from a JAR into memory.
+///
+/// Reads the ZIP archive sequentially and returns a vector of `(entry_name, bytes)`
+/// pairs. This enables callers to parallelize parsing via `rayon::par_iter()`.
+pub fn collect_class_files(jar_path: &Path) -> Result<Vec<(String, Vec<u8>)>> {
+    let file = std::fs::File::open(jar_path)
+        .with_context(|| format!("opening JAR {}", jar_path.display()))?;
+    let mut archive =
+        ZipArchive::new(file).with_context(|| format!("reading ZIP {}", jar_path.display()))?;
+
+    let mut entries = Vec::new();
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i)?;
+        let name = entry.name().to_string();
+
+        if name.ends_with(".class") && !name.starts_with("META-INF/") {
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf)?;
+            entries.push((name, buf));
+        }
+    }
+    Ok(entries)
+}
+
 /// Extract a single file from a JAR by its path within the archive.
 pub fn extract_entry(jar_path: &Path, entry_path: &str) -> Result<Vec<u8>> {
     let file = std::fs::File::open(jar_path)

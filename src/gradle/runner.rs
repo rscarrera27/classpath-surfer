@@ -29,7 +29,8 @@ pub fn run_export_task(
         .arg(init_script_path)
         .arg(format!("-PclasspathSurfer.configurations={configs_prop}"))
         .arg("classpathSurferExport")
-        .arg("--quiet");
+        .arg("--quiet")
+        .arg("--parallel");
 
     if let Some(java_home) = java_home {
         cmd.env("JAVA_HOME", java_home);

@@ -33,7 +33,7 @@ Coding agents (like Claude Code) working on Gradle Java/Kotlin projects repeated
 | | Feature | Description |
 |---|---------|-------------|
 | :mag: | **Symbol search** | Smart search with auto FQN detection, CamelCase token splitting, and prefix matching — filter by kind, dependency, access level, or classpath |
-| :zap: | **Fast indexing** | Auto-extract Gradle project classpath and index all symbols in seconds; incremental updates via GAV-level diff |
+| :zap: | **Fast indexing** | Auto-extract Gradle project classpath and index all symbols in seconds with parallel JAR parsing via rayon; incremental updates via GAV-level diff |
 | :globe_with_meridians: | **Kotlin signatures** | Decode `@kotlin.Metadata` protobuf to display native Kotlin signatures like `suspend fun` and `data class` |
 | :package: | **JVM-language agnostic** | Java, Kotlin, Scala, Groovy, Clojure — search symbols from dependencies written in any JVM language |
 | :page_facing_up: | **Source code lookup** | Auto-focus on a symbol with surrounding context; source JARs when available, otherwise on-demand CFR/Vineflower decompilation — Kotlin shows original `.kt` source with a secondary decompiled Java view |
@@ -181,9 +181,9 @@ Benchmarked on Macbook Pro 2023(M2 Pro, 32GB) with a 42-dependency project (156,
 
 | Operation | Time |
 |-----------|------|
-| Full refresh (42 deps, 156K symbols) | **2.72 s** |
-| Incremental refresh (1 dep removed) | **677 ms** |
-| No-op refresh (up to date) | **180 µs** |
+| Full refresh (42 deps, 156K symbols) | **1.88 s** |
+| Incremental refresh (1 dep removed) | **638 ms** |
+| No-op refresh (up to date) | **177 µs** |
 
 <details>
 <summary>Reproduce these benchmarks</summary>
