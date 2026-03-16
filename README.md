@@ -116,6 +116,22 @@ classpath-surfer search dep "io.netty:*"
 classpath-surfer search dep --scope runtimeClasspath
 ```
 
+### Browse packages
+
+```bash
+# List indexed Java packages with symbol counts
+classpath-surfer search pkg
+
+# Filter by package pattern
+classpath-surfer search pkg "com.google.*"
+
+# Packages from a specific dependency
+classpath-surfer search pkg --dependency "com.google.code.gson:gson:*"
+
+# Filter by configuration scope
+classpath-surfer search pkg --scope compileClasspath
+```
+
 ### AI agent / script integration
 
 ```bash
@@ -198,13 +214,13 @@ graph TD
 
 ## Claude Code Integration
 
-classpath-surfer ships as a [Claude Code plugin](https://claude.ai/claude-code) with three skills:
+classpath-surfer ships as a [Claude Code plugin](https://claude.ai/claude-code) with three skills that mirror CLI commands:
 
 | Skill | Usage |
 |-------|-------|
-| `/find-symbol <name>` | Search for a symbol and display results as a table |
-| `/show-source <fqn>` | Show source code for a fully qualified symbol |
-| `/refresh-deps` | Re-index dependencies after a version bump |
+| `/search-classpath <query>` | Search for symbols, dependencies, or packages |
+| `/show-classpath-source <fqn>` | Show source code for a fully qualified symbol |
+| `/classpath-index [action]` | Manage the symbol index (init, refresh, status, clean, diagnose) |
 
 ### Install the plugin
 

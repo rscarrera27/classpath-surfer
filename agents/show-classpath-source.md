@@ -1,5 +1,5 @@
 ---
-name: show-source
+name: show-classpath-source
 description: "Use when the user wants to read the source code or implementation of a Java/Kotlin symbol from Gradle project dependencies."
 tools: Bash
 model: haiku
@@ -30,4 +30,4 @@ maxTurns: 8
 
 ## Troubleshooting
 
-If a CLI command fails unexpectedly (unknown flag, unexpected output format, etc.), run `/manage-index diagnose` to check for CLI/plugin version mismatch.
+If a CLI command fails unexpectedly, run `/classpath-index diagnose` to check for CLI/plugin version mismatch.

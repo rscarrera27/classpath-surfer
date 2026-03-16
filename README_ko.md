@@ -117,6 +117,22 @@ classpath-surfer search dep "io.netty:*"
 classpath-surfer search dep --scope runtimeClasspath
 ```
 
+### 패키지 탐색
+
+```bash
+# 인덱스된 Java 패키지 목록 — 심볼 수 포함
+classpath-surfer search pkg
+
+# 패키지 패턴으로 필터
+classpath-surfer search pkg "com.google.*"
+
+# 특정 의존성의 패키지만 표시
+classpath-surfer search pkg --dependency "com.google.code.gson:gson:*"
+
+# 설정 스코프별 필터
+classpath-surfer search pkg --scope compileClasspath
+```
+
 ### AI 에이전트 / 스크립트 연동
 
 ```bash
@@ -199,13 +215,13 @@ graph TD
 
 ## Claude Code 통합
 
-classpath-surfer는 [Claude Code 플러그인](https://claude.ai/claude-code)으로 세 개의 스킬을 제공합니다:
+classpath-surfer는 CLI 커맨드와 1:1로 대응하는 세 개의 [Claude Code 플러그인](https://claude.ai/claude-code) 스킬을 제공합니다:
 
 | 스킬 | 용도 |
 |------|------|
-| `/find-symbol <name>` | 심볼을 검색하고 결과를 테이블로 표시 |
-| `/show-source <fqn>` | 정규화된 이름으로 소스 코드 표시 |
-| `/refresh-deps` | 버전 변경 후 의존성 재인덱싱 |
+| `/search-classpath <query>` | 심볼, 의존성, 패키지 검색 |
+| `/show-classpath-source <fqn>` | 정규화된 이름으로 소스 코드 표시 |
+| `/classpath-index [action]` | 심볼 인덱스 관리 (init, refresh, status, clean, diagnose) |
 
 ### 플러그인 설치
 
