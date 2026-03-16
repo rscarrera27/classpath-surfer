@@ -139,7 +139,7 @@ fn agentic_deps_json_output() {
     let json: serde_json::Value = serde_json::from_slice(&output.stdout)
         .expect("stdout should be valid JSON in agentic mode");
     assert!(json["total_count"].as_u64().unwrap() > 0);
-    assert!(json["dependencies"].as_array().unwrap().len() > 0);
+    assert!(!json["dependencies"].as_array().unwrap().is_empty());
     let first = &json["dependencies"][0];
     assert!(first["gav"].is_string());
     assert!(first["symbol_count"].is_u64());

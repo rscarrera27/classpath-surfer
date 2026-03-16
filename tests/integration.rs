@@ -476,8 +476,8 @@ fn scala_clojure_symbols() {
 #[test]
 fn pkgs_lists_all_packages() {
     let project = require_indexed_project!();
-    let output =
-        cli::pkgs::run(&project.project_dir, None, None, 500, 0).expect("pkgs should succeed");
+    let output = cli::pkgs::run(&project.project_dir, None, None, None, 500, 0)
+        .expect("pkgs should succeed");
     assert!(output.total_count > 0, "should have at least one package");
     assert!(!output.packages.is_empty());
     for pkg in &output.packages {
@@ -492,8 +492,15 @@ fn pkgs_lists_all_packages() {
 #[test]
 fn pkgs_filter() {
     let project = require_indexed_project!();
-    let output = cli::pkgs::run(&project.project_dir, Some("com.google.*"), None, 500, 0)
-        .expect("pkgs with filter should succeed");
+    let output = cli::pkgs::run(
+        &project.project_dir,
+        Some("com.google.*"),
+        None,
+        None,
+        500,
+        0,
+    )
+    .expect("pkgs with filter should succeed");
     assert!(
         output.total_count > 0,
         "should have at least one com.google package"
@@ -510,8 +517,8 @@ fn pkgs_filter() {
 #[test]
 fn pkgs_pagination() {
     let project = require_indexed_project!();
-    let output =
-        cli::pkgs::run(&project.project_dir, None, None, 2, 0).expect("pkgs with small limit");
+    let output = cli::pkgs::run(&project.project_dir, None, None, None, 2, 0)
+        .expect("pkgs with small limit");
     assert!(output.packages.len() <= 2);
     if output.total_count > 2 {
         assert!(output.has_more, "should have more results");
@@ -525,6 +532,7 @@ fn pkgs_dependency_filter() {
         &project.project_dir,
         None,
         Some("com.google.code.gson:gson:*"),
+        None,
         500,
         0,
     )

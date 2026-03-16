@@ -23,12 +23,11 @@ fn get_java_home(version: &str) -> Option<PathBuf> {
     if let Ok(output) = Command::new("mise")
         .args(["where", &format!("java@temurin-{version}")])
         .output()
+        && output.status.success()
     {
-        if output.status.success() {
-            let path = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
-            if path.is_dir() {
-                return Some(path);
-            }
+        let path = PathBuf::from(String::from_utf8(output.stdout).unwrap().trim());
+        if path.is_dir() {
+            return Some(path);
         }
     }
     None

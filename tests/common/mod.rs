@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_macros, unused_imports)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
