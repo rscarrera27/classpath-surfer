@@ -2,8 +2,14 @@
 //!
 //! Renders a tri-pane layout and handles keyboard navigation between columns,
 //! lazy data loading, and an integrated source code overlay.
+//!
+//! All data loading runs on background threads so the UI never freezes.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
@@ -16,7 +22,10 @@ use crate::cli;
 use crate::config::Config;
 use crate::index::reader::IndexReader;
 use crate::manifest::ClasspathManifest;
-use crate::model::{DepInfo, PkgInfo, SearchQuery, SearchResult, ShowOutput, format_lang_display};
+use crate::model::{
+    AccessLevel, DepInfo, PkgInfo, SearchQuery, SearchResult, ShowOutput, SymbolKind,
+    format_lang_display,
+};
 use crate::tui::show::{self, HighlightedShowOutput};
 
 use super::{BrowserConfig, ColumnFocus};
@@ -27,10 +36,50 @@ const LOAD_MORE_THRESHOLD: usize = 5;
 /// Page size for symbol search results.
 const SYMBOL_PAGE_SIZE: usize = 50;
 
+// ---------------------------------------------------------------------------
+// Background task types
+// ---------------------------------------------------------------------------
+
+/// Cloneable snapshot of filter configuration for background tasks.
+#[derive(Clone)]
+struct FilterSnapshot {
+    symbol_query: Option<String>,
+    pkg_query: Option<String>,
+    symbol_types: Vec<SymbolKind>,
+    access_levels: Vec<AccessLevel>,
+    classpath: Option<String>,
+}
+
+/// Result from a background column data load.
+enum LoadResult {
+    /// Dep changed: new packages and symbols.
+    DepChanged {
+        packages: Vec<PkgInfo>,
+        symbols: Vec<SearchResult>,
+        symbols_total: usize,
+        symbols_has_more: bool,
+    },
+    /// Pkg changed: new symbols.
+    Symbols {
+        symbols: Vec<SearchResult>,
+        symbols_total: usize,
+        symbols_has_more: bool,
+    },
+    /// Infinite scroll: append symbols.
+    MoreSymbols {
+        more: Vec<SearchResult>,
+        symbols_total: usize,
+    },
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
 /// Run the 3-column browser event loop.
 pub fn run(project_dir: &Path, config: &BrowserConfig) -> Result<()> {
     let index_dir = project_dir.join(".classpath-surfer/index");
-    let reader = IndexReader::open(&index_dir)?;
+    let reader = Arc::new(IndexReader::open(&index_dir)?);
 
     // Load manifest for classpath info
     let manifest_path = project_dir.join(".classpath-surfer/classpath-manifest.json");
@@ -152,6 +201,14 @@ pub fn run(project_dir: &Path, config: &BrowserConfig) -> Result<()> {
     let has_all_entry = config.initial_focus != ColumnFocus::Dep;
     let has_all_pkg_entry = config.initial_focus == ColumnFocus::Symbol;
 
+    let filters = FilterSnapshot {
+        symbol_query: config.symbol_query.map(|s| s.to_string()),
+        pkg_query: config.pkg_query.map(|s| s.to_string()),
+        symbol_types: config.symbol_types.to_vec(),
+        access_levels: config.access_levels.to_vec(),
+        classpath: config.classpath.map(|s| s.to_string()),
+    };
+
     let mut state = BrowserState {
         focus: config.initial_focus,
         has_all_entry,
@@ -165,29 +222,59 @@ pub fn run(project_dir: &Path, config: &BrowserConfig) -> Result<()> {
         symbols_total: 0,
         symbols_has_more: false,
         show_state: None,
+        loading: None,
+        loading_show: None,
         error_message: None,
     };
 
-    // Load initial packages for the first dep
-    load_packages(&reader, &mut state, config)?;
-
-    // If initial focus is Pkg or Symbol, ensure packages column has selection
-    if config.initial_focus != ColumnFocus::Dep && !state.packages.is_empty() {
-        state.pkg_state.select(Some(0));
-    }
-
-    // Load initial symbols if we have packages
-    if config.initial_focus == ColumnFocus::Symbol || config.initial_focus == ColumnFocus::Pkg {
-        load_symbols(&reader, &mut state, config)?;
-        if config.initial_focus == ColumnFocus::Symbol && !state.symbols.is_empty() {
-            state.symbol_state.select(Some(0));
-        }
-    }
+    // Kick off initial load in the background
+    state.loading = Some(spawn_dep_load(Arc::clone(&reader), &state, &filters));
 
     loop {
+        // Check background column-data loading completion
+        if let Some(rx) = state.loading.take() {
+            match rx.try_recv() {
+                Ok(Ok(result)) => apply_load_result(&mut state, result, config),
+                Ok(Err(e)) => {
+                    state.error_message = Some(format!("{e:#}"));
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    state.loading = Some(rx); // still loading
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    state.error_message = Some("Data loading failed".to_string());
+                }
+            }
+        }
+
+        // Check background show loading completion
+        if let Some(rx) = state.loading_show.take() {
+            match rx.try_recv() {
+                Ok(Ok(show_output)) => {
+                    state.show_state = Some(ShowViewState::new(show_output));
+                }
+                Ok(Err(e)) => {
+                    state.error_message = Some(format!("{e:#}"));
+                }
+                Err(mpsc::TryRecvError::Empty) => {
+                    state.loading_show = Some(rx);
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    state.error_message = Some("Show loading failed".to_string());
+                }
+            }
+        }
+
         guard.terminal.draw(|frame| {
             render_browser(frame, frame.area(), &mut state, config);
         })?;
+
+        // Poll with timeout when any background task is running so we stay responsive;
+        // block indefinitely otherwise to avoid busy-waiting.
+        let is_loading = state.loading.is_some() || state.loading_show.is_some();
+        if is_loading && !event::poll(Duration::from_millis(100))? {
+            continue;
+        }
 
         if let Event::Key(key) = event::read()? {
             if key.kind != KeyEventKind::Press {
@@ -220,55 +307,36 @@ pub fn run(project_dir: &Path, config: &BrowserConfig) -> Result<()> {
                 // Browser navigation
                 match key.code {
                     KeyCode::Char('q') | KeyCode::Esc => break,
-                    KeyCode::Left | KeyCode::Char('h') => {
-                        match state.focus {
-                            ColumnFocus::Dep => {} // leftmost column — do nothing
-                            ColumnFocus::Pkg => {
-                                state.focus = ColumnFocus::Dep;
-                            }
-                            ColumnFocus::Symbol => {
-                                state.focus = ColumnFocus::Pkg;
-                            }
-                        }
-                    }
+                    KeyCode::Left | KeyCode::Char('h') => match state.focus {
+                        ColumnFocus::Dep => {}
+                        ColumnFocus::Pkg => state.focus = ColumnFocus::Dep,
+                        ColumnFocus::Symbol => state.focus = ColumnFocus::Pkg,
+                    },
                     KeyCode::Right | KeyCode::Char('l') => {
-                        move_right(&reader, &mut state, config)?;
+                        move_right(&reader, &mut state, &filters);
                     }
-                    KeyCode::Enter => {
-                        match state.focus {
-                            ColumnFocus::Symbol => {
-                                // Open show overlay
-                                let idx = state.symbol_state.selected().unwrap_or(0);
-                                if idx < state.symbols.len() {
-                                    state.error_message = None;
-                                    match load_show_output(
-                                        &state.symbols,
-                                        idx,
-                                        project_dir,
-                                        &app_config,
-                                        manifest.as_ref(),
-                                    ) {
-                                        Ok(show_output) => {
-                                            state.show_state =
-                                                Some(ShowViewState::new(show_output));
-                                        }
-                                        Err(e) => {
-                                            state.error_message = Some(format!("{e:#}"));
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {
-                                // Enter in dep/pkg columns moves right
-                                move_right(&reader, &mut state, config)?;
+                    KeyCode::Enter => match state.focus {
+                        ColumnFocus::Symbol => {
+                            let idx = state.symbol_state.selected().unwrap_or(0);
+                            if idx < state.symbols.len() {
+                                state.error_message = None;
+                                state.loading_show = Some(spawn_show_load(
+                                    state.symbols[idx].fqn.clone(),
+                                    project_dir.to_path_buf(),
+                                    app_config.clone(),
+                                    manifest.clone(),
+                                ));
                             }
                         }
-                    }
+                        _ => {
+                            move_right(&reader, &mut state, &filters);
+                        }
+                    },
                     KeyCode::Down | KeyCode::Char('j') => {
-                        navigate_down(&reader, &mut state, config)?;
+                        navigate_down(&reader, &mut state, &filters);
                     }
                     KeyCode::Up | KeyCode::Char('k') => {
-                        navigate_up(&reader, &mut state, config)?;
+                        navigate_up(&reader, &mut state, &filters);
                     }
                     _ => {}
                 }
@@ -279,19 +347,19 @@ pub fn run(project_dir: &Path, config: &BrowserConfig) -> Result<()> {
     Ok(())
 }
 
-/// Move focus to the right column (does not open show overlay — that is handled by Enter).
-fn move_right(
-    reader: &IndexReader,
-    state: &mut BrowserState,
-    config: &BrowserConfig,
-) -> Result<()> {
+// ---------------------------------------------------------------------------
+// Navigation helpers (spawn background tasks instead of blocking)
+// ---------------------------------------------------------------------------
+
+/// Move focus to the right column.
+fn move_right(reader: &Arc<IndexReader>, state: &mut BrowserState, filters: &FilterSnapshot) {
     match state.focus {
         ColumnFocus::Dep => {
             if state.pkg_row_count() > 0 {
                 state.focus = ColumnFocus::Pkg;
                 if state.pkg_state.selected().is_none() {
                     state.pkg_state.select(Some(0));
-                    load_symbols(reader, state, config)?;
+                    state.loading = Some(spawn_pkg_load(Arc::clone(reader), state, filters));
                 }
             }
         }
@@ -303,72 +371,54 @@ fn move_right(
                 }
             }
         }
-        ColumnFocus::Symbol => {
-            // Right arrow in symbols column does nothing; Enter opens show overlay
-        }
+        ColumnFocus::Symbol => {}
     }
-    Ok(())
 }
 
 /// Navigate down in the focused column.
-fn navigate_down(
-    reader: &IndexReader,
-    state: &mut BrowserState,
-    config: &BrowserConfig,
-) -> Result<()> {
+fn navigate_down(reader: &Arc<IndexReader>, state: &mut BrowserState, filters: &FilterSnapshot) {
     match state.focus {
         ColumnFocus::Dep => {
             let i = state.dep_state.selected().unwrap_or(0);
             if i < state.dep_row_count().saturating_sub(1) {
                 state.dep_state.select(Some(i + 1));
-                load_packages(reader, state, config)?;
-                load_symbols(reader, state, config)?;
+                state.loading = Some(spawn_dep_load(Arc::clone(reader), state, filters));
             }
         }
         ColumnFocus::Pkg => {
             let i = state.pkg_state.selected().unwrap_or(0);
             if i < state.pkg_row_count().saturating_sub(1) {
                 state.pkg_state.select(Some(i + 1));
-                load_symbols(reader, state, config)?;
+                state.loading = Some(spawn_pkg_load(Arc::clone(reader), state, filters));
             }
         }
         ColumnFocus::Symbol => {
             let i = state.symbol_state.selected().unwrap_or(0);
-            // Infinite scroll
-            if state.symbols_has_more
-                && i + LOAD_MORE_THRESHOLD >= state.symbols.len()
-                && let Err(e) = load_more_symbols(reader, state, config)
-            {
-                state.error_message = Some(format!("{e:#}"));
+            if state.symbols_has_more && i + LOAD_MORE_THRESHOLD >= state.symbols.len() {
+                state.loading = Some(spawn_scroll_load(Arc::clone(reader), state, filters));
             }
             if i < state.symbols.len().saturating_sub(1) {
                 state.symbol_state.select(Some(i + 1));
             }
         }
     }
-    Ok(())
 }
 
 /// Navigate up in the focused column.
-fn navigate_up(
-    reader: &IndexReader,
-    state: &mut BrowserState,
-    config: &BrowserConfig,
-) -> Result<()> {
+fn navigate_up(reader: &Arc<IndexReader>, state: &mut BrowserState, filters: &FilterSnapshot) {
     match state.focus {
         ColumnFocus::Dep => {
             let i = state.dep_state.selected().unwrap_or(0);
             if i > 0 {
                 state.dep_state.select(Some(i - 1));
-                load_packages(reader, state, config)?;
-                load_symbols(reader, state, config)?;
+                state.loading = Some(spawn_dep_load(Arc::clone(reader), state, filters));
             }
         }
         ColumnFocus::Pkg => {
             let i = state.pkg_state.selected().unwrap_or(0);
             if i > 0 {
                 state.pkg_state.select(Some(i - 1));
-                load_symbols(reader, state, config)?;
+                state.loading = Some(spawn_pkg_load(Arc::clone(reader), state, filters));
             }
         }
         ColumnFocus::Symbol => {
@@ -378,174 +428,258 @@ fn navigate_up(
             }
         }
     }
-    Ok(())
 }
 
-// --- Data loading ---
+// ---------------------------------------------------------------------------
+// Background data loading
+// ---------------------------------------------------------------------------
 
-/// Load packages for the currently selected dep (or all deps if "(All)").
-fn load_packages(
-    reader: &IndexReader,
-    state: &mut BrowserState,
-    config: &BrowserConfig,
-) -> Result<()> {
-    let mut pkgs = if state.is_all_selected() {
-        let gav_refs: Vec<&str> = state.deps.iter().map(|d| d.gav.as_str()).collect();
-        let (pkgs, _) = reader.list_packages_for_gavs(&gav_refs)?;
-        pkgs
-    } else {
-        let selected_gav = state.selected_dep_gav().unwrap();
-        let (pkgs, _) = reader.list_packages_for_dependency(selected_gav)?;
-        pkgs
-    };
-
-    // Apply pkg_query filter
-    if let Some(pattern) = config.pkg_query {
-        pkgs.retain(|(pkg, _)| cli::matches_glob_pattern(pkg, pattern));
+/// Apply a completed background load result to the browser state.
+fn apply_load_result(state: &mut BrowserState, result: LoadResult, config: &BrowserConfig) {
+    match result {
+        LoadResult::DepChanged {
+            packages,
+            symbols,
+            symbols_total,
+            symbols_has_more,
+        } => {
+            state.packages = packages;
+            let pkg_rows = state.pkg_row_count();
+            if pkg_rows == 0 {
+                state.pkg_state = TableState::default();
+            } else if state.pkg_state.selected().is_none()
+                || state.pkg_state.selected().unwrap_or(0) >= pkg_rows
+            {
+                state.pkg_state.select(Some(0));
+            }
+            state.symbols = symbols;
+            state.symbols_total = symbols_total;
+            state.symbols_has_more = symbols_has_more;
+            if state.symbols.is_empty() {
+                state.symbol_state = TableState::default();
+            } else if config.initial_focus == ColumnFocus::Symbol {
+                state.symbol_state.select(Some(0));
+            } else {
+                state.symbol_state = TableState::default();
+            }
+        }
+        LoadResult::Symbols {
+            symbols,
+            symbols_total,
+            symbols_has_more,
+        } => {
+            state.symbols = symbols;
+            state.symbols_total = symbols_total;
+            state.symbols_has_more = symbols_has_more;
+            if state.symbols.is_empty() {
+                state.symbol_state = TableState::default();
+            } else {
+                state.symbol_state.select(Some(0));
+            }
+        }
+        LoadResult::MoreSymbols {
+            more,
+            symbols_total,
+        } => {
+            state.symbols_has_more = state.symbols.len() + more.len() < symbols_total;
+            state.symbols_total = symbols_total;
+            state.symbols.extend(more);
+        }
     }
+}
 
-    // Apply symbol_query filter: only keep packages that have matching symbols
-    if let Some(query) = config.symbol_query {
-        let dependency = state.selected_dep_gav();
-        pkgs.retain(|(pkg, _)| {
-            let sq = SearchQuery {
-                query: Some(query),
-                symbol_types: config.symbol_types,
-                limit: 1,
-                offset: 0,
-                dependency,
-                access_levels: config.access_levels,
-                classpath: config.classpath,
-                package: Some(pkg),
+/// Spawn a background load for when the selected dep changes.
+///
+/// Loads packages (filtered) and initial symbols in one shot.
+fn spawn_dep_load(
+    reader: Arc<IndexReader>,
+    state: &BrowserState,
+    filters: &FilterSnapshot,
+) -> mpsc::Receiver<Result<LoadResult>> {
+    let is_all = state.is_all_selected();
+    let has_all_pkg = state.has_all_pkg_entry;
+    let dep_gav = state.selected_dep_gav().map(|s| s.to_string());
+    let all_gavs: Vec<String> = state.deps.iter().map(|d| d.gav.clone()).collect();
+    let filters = filters.clone();
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = (|| -> Result<LoadResult> {
+            // Load packages
+            let mut pkgs = if is_all {
+                let refs: Vec<&str> = all_gavs.iter().map(|s| s.as_str()).collect();
+                let (p, _) = reader.list_packages_for_gavs(&refs)?;
+                p
+            } else {
+                let gav = dep_gav.as_deref().unwrap();
+                let (p, _) = reader.list_packages_for_dependency(gav)?;
+                p
             };
-            reader
-                .search(&sq)
-                .map(|(_, total, _)| total > 0)
-                .unwrap_or(false)
-        });
-    }
 
-    state.packages = pkgs
-        .into_iter()
-        .map(|(package, symbol_count)| PkgInfo {
-            package,
-            symbol_count,
-        })
-        .collect();
+            if let Some(ref pattern) = filters.pkg_query {
+                pkgs.retain(|(pkg, _)| cli::matches_glob_pattern(pkg, pattern));
+            }
+            if let Some(ref query) = filters.symbol_query {
+                let dependency = dep_gav.as_deref();
+                pkgs.retain(|(pkg, _)| {
+                    let sq = SearchQuery {
+                        query: Some(query),
+                        symbol_types: &filters.symbol_types,
+                        limit: 1,
+                        offset: 0,
+                        dependency,
+                        access_levels: &filters.access_levels,
+                        classpath: filters.classpath.as_deref(),
+                        package: Some(pkg),
+                    };
+                    reader
+                        .search(&sq)
+                        .map(|(_, total, _)| total > 0)
+                        .unwrap_or(false)
+                });
+            }
 
-    // Reset pkg selection
-    let pkg_rows = state.pkg_row_count();
-    if pkg_rows == 0 {
-        state.pkg_state = TableState::default();
-    } else if state.pkg_state.selected().is_none()
-        || state.pkg_state.selected().unwrap_or(0) >= pkg_rows
-    {
-        state.pkg_state.select(Some(0));
-    }
+            let packages: Vec<PkgInfo> = pkgs
+                .into_iter()
+                .map(|(package, symbol_count)| PkgInfo {
+                    package,
+                    symbol_count,
+                })
+                .collect();
 
-    // Clear symbols since dep changed
-    state.symbols.clear();
-    state.symbol_state = TableState::default();
-    state.symbols_total = 0;
-    state.symbols_has_more = false;
+            // Load symbols for the first selected package (or all)
+            let pkg_name = if has_all_pkg {
+                None
+            } else {
+                packages.first().map(|p| p.package.as_str())
+            };
 
-    Ok(())
+            let sq = SearchQuery {
+                query: filters.symbol_query.as_deref(),
+                symbol_types: &filters.symbol_types,
+                limit: SYMBOL_PAGE_SIZE,
+                offset: 0,
+                dependency: dep_gav.as_deref(),
+                access_levels: &filters.access_levels,
+                classpath: filters.classpath.as_deref(),
+                package: pkg_name,
+            };
+            let (symbols, total, _) = reader.search(&sq)?;
+            let has_more = symbols.len() < total;
+
+            Ok(LoadResult::DepChanged {
+                packages,
+                symbols,
+                symbols_total: total,
+                symbols_has_more: has_more,
+            })
+        })();
+        let _ = tx.send(result);
+    });
+    rx
 }
 
-/// Load symbols for the currently selected dep+pkg (or all if "(All)").
-fn load_symbols(
-    reader: &IndexReader,
-    state: &mut BrowserState,
-    config: &BrowserConfig,
-) -> Result<()> {
-    let dependency = state.selected_dep_gav();
-    let pkg = state.selected_pkg_name();
+/// Spawn a background load for when the selected package changes.
+fn spawn_pkg_load(
+    reader: Arc<IndexReader>,
+    state: &BrowserState,
+    filters: &FilterSnapshot,
+) -> mpsc::Receiver<Result<LoadResult>> {
+    let dep_gav = state.selected_dep_gav().map(|s| s.to_string());
+    let pkg_name = state.selected_pkg_name().map(|s| s.to_string());
+    let filters = filters.clone();
 
-    let sq = SearchQuery {
-        query: config.symbol_query,
-        symbol_types: config.symbol_types,
-        limit: SYMBOL_PAGE_SIZE,
-        offset: 0,
-        dependency,
-        access_levels: config.access_levels,
-        classpath: config.classpath,
-        package: pkg,
-    };
-
-    let (results, total, _) = reader.search(&sq)?;
-    state.symbols_has_more = results.len() < total;
-    state.symbols_total = total;
-    state.symbols = results;
-
-    // Reset symbol selection
-    if state.symbols.is_empty() {
-        state.symbol_state = TableState::default();
-    } else {
-        state.symbol_state.select(Some(0));
-    }
-
-    Ok(())
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = (|| -> Result<LoadResult> {
+            let sq = SearchQuery {
+                query: filters.symbol_query.as_deref(),
+                symbol_types: &filters.symbol_types,
+                limit: SYMBOL_PAGE_SIZE,
+                offset: 0,
+                dependency: dep_gav.as_deref(),
+                access_levels: &filters.access_levels,
+                classpath: filters.classpath.as_deref(),
+                package: pkg_name.as_deref(),
+            };
+            let (symbols, total, _) = reader.search(&sq)?;
+            let has_more = symbols.len() < total;
+            Ok(LoadResult::Symbols {
+                symbols,
+                symbols_total: total,
+                symbols_has_more: has_more,
+            })
+        })();
+        let _ = tx.send(result);
+    });
+    rx
 }
 
-/// Load more symbol results (infinite scroll).
-fn load_more_symbols(
-    reader: &IndexReader,
-    state: &mut BrowserState,
-    config: &BrowserConfig,
-) -> Result<()> {
-    if !state.symbols_has_more {
-        return Ok(());
-    }
+/// Spawn a background load for infinite scroll (more symbols).
+fn spawn_scroll_load(
+    reader: Arc<IndexReader>,
+    state: &BrowserState,
+    filters: &FilterSnapshot,
+) -> mpsc::Receiver<Result<LoadResult>> {
+    let dep_gav = state.selected_dep_gav().map(|s| s.to_string());
+    let pkg_name = state.selected_pkg_name().map(|s| s.to_string());
+    let offset = state.symbols.len();
+    let filters = filters.clone();
 
-    let dependency = state.selected_dep_gav();
-    let pkg = state.selected_pkg_name();
-
-    let sq = SearchQuery {
-        query: config.symbol_query,
-        symbol_types: config.symbol_types,
-        limit: SYMBOL_PAGE_SIZE,
-        offset: state.symbols.len(),
-        dependency,
-        access_levels: config.access_levels,
-        classpath: config.classpath,
-        package: pkg,
-    };
-
-    let (more, total, _) = reader.search(&sq)?;
-    state.symbols_total = total;
-    state.symbols_has_more = state.symbols.len() + more.len() < total;
-    state.symbols.extend(more);
-
-    Ok(())
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = (|| -> Result<LoadResult> {
+            let sq = SearchQuery {
+                query: filters.symbol_query.as_deref(),
+                symbol_types: &filters.symbol_types,
+                limit: SYMBOL_PAGE_SIZE,
+                offset,
+                dependency: dep_gav.as_deref(),
+                access_levels: &filters.access_levels,
+                classpath: filters.classpath.as_deref(),
+                package: pkg_name.as_deref(),
+            };
+            let (more, total, _) = reader.search(&sq)?;
+            Ok(LoadResult::MoreSymbols {
+                more,
+                symbols_total: total,
+            })
+        })();
+        let _ = tx.send(result);
+    });
+    rx
 }
 
-/// Load show output for the selected symbol.
-fn load_show_output(
-    results: &[SearchResult],
-    selected: usize,
-    project_dir: &Path,
-    config: &Config,
-    manifest: Option<&ClasspathManifest>,
-) -> Result<ShowOutput> {
-    let result = &results[selected];
-
-    let opts = cli::show::ShowOptions {
-        fqn: &result.fqn,
-        decompiler: config.decompiler,
-        decompiler_jar: config.decompiler_jar.as_deref(),
-        no_decompile: config.no_decompile,
-        context: 50,
-        full: true,
-    };
-
-    if let Some(m) = manifest {
-        cli::show::load_show_output_focused(project_dir, m, &opts)
-    } else {
-        cli::show::run(project_dir, &opts)
-    }
+/// Spawn a background thread to load show output (decompiler can be slow).
+fn spawn_show_load(
+    fqn: String,
+    project_dir: PathBuf,
+    config: Config,
+    manifest: Option<ClasspathManifest>,
+) -> mpsc::Receiver<Result<ShowOutput>> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let opts = cli::show::ShowOptions {
+            fqn: &fqn,
+            decompiler: config.decompiler,
+            decompiler_jar: config.decompiler_jar.as_deref(),
+            no_decompile: config.no_decompile,
+            context: 50,
+            full: true,
+        };
+        let result = if let Some(ref m) = manifest {
+            cli::show::load_show_output_focused(&project_dir, m, &opts)
+        } else {
+            cli::show::run(&project_dir, &opts)
+        };
+        let _ = tx.send(result);
+    });
+    rx
 }
 
-// --- State ---
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
 
 /// Mutable runtime state for the 3-column browser.
 struct BrowserState {
@@ -571,6 +705,12 @@ struct BrowserState {
 
     // Show overlay
     show_state: Option<ShowViewState>,
+
+    // Background loading
+    /// Pending column data load (packages, symbols, or scroll).
+    loading: Option<mpsc::Receiver<Result<LoadResult>>>,
+    /// Pending show source load (decompiler).
+    loading_show: Option<mpsc::Receiver<Result<ShowOutput>>>,
     error_message: Option<String>,
 }
 
@@ -664,7 +804,9 @@ impl ShowViewState {
     }
 }
 
-// --- Show key handling ---
+// ---------------------------------------------------------------------------
+// Show key handling
+// ---------------------------------------------------------------------------
 
 /// Classified key action for the show overlay.
 enum ShowKeyAction {
@@ -689,7 +831,9 @@ fn classify_show_key(key: KeyEvent) -> ShowKeyAction {
     }
 }
 
-// --- Rendering ---
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
 
 /// Render the full browser UI.
 fn render_browser(frame: &mut Frame, area: Rect, state: &mut BrowserState, config: &BrowserConfig) {
@@ -742,7 +886,10 @@ fn render_browser(frame: &mut Frame, area: Rect, state: &mut BrowserState, confi
     render_detail_panel(frame, detail_area, state);
 
     // Hint bar
-    let hint_text = if let Some(ref err) = state.error_message {
+    let is_loading = state.loading.is_some() || state.loading_show.is_some();
+    let hint_text = if is_loading {
+        Line::from(" Loading... ").style(Style::default().fg(Color::Yellow))
+    } else if let Some(ref err) = state.error_message {
         Line::from(format!(" Error: {err} ")).style(Style::default().fg(Color::Red))
     } else {
         Line::from(" ←→ columns | ↑↓ navigate | Enter show source | Esc/q quit ")

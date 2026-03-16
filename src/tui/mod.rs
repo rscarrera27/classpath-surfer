@@ -12,6 +12,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::prelude::*;
+use ratatui::widgets::Clear;
 
 pub mod highlight;
 pub mod search;
@@ -69,11 +70,13 @@ pub fn render_overflow_indicators(frame: &mut Frame, area: Rect, offset: usize, 
 
     if offset > 0 {
         let rect = Rect::new(inner.x, inner.y, inner.width, 1);
+        frame.render_widget(Clear, rect);
         frame.render_widget(Line::from("   ...").style(dim), rect);
     }
 
     if total_rows > offset + visible_height {
         let rect = Rect::new(inner.x, inner.y + inner.height - 1, inner.width, 1);
+        frame.render_widget(Clear, rect);
         frame.render_widget(Line::from("   ...").style(dim), rect);
     }
 }
